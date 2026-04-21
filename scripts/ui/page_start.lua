@@ -43,9 +43,9 @@ function M.Create(onEnter)
         backgroundColor = C.bg,
     }
 
-    -- 背景图
+    -- 纯净背景图（已去除 UI/文字）
     startScreen_:AddChild(UI.Panel {
-        backgroundImage = "image/bg_start_20260421150448.png",
+        backgroundImage = "image/edited_bg_start_clean_20260421153502.png",
         backgroundFit   = "cover",
         width           = "100%",
         height          = "100%",
@@ -53,10 +53,19 @@ function M.Create(onEnter)
         top = 0, left = 0,
     })
 
+    -- 全屏暗色遮罩（90%透明 = alpha 25/255）
+    startScreen_:AddChild(UI.Panel {
+        width           = "100%",
+        height          = "100%",
+        position        = "absolute",
+        top = 0, left = 0,
+        backgroundColor = { 0, 0, 0, 25 },
+    })
+
     -- 底部渐变遮罩（让下方按钮更清晰）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
-        height   = "50%",
+        height   = "40%",
         position = "absolute",
         bottom   = 0,
         left     = 0,
@@ -64,23 +73,7 @@ function M.Create(onEnter)
             direction = "to-bottom",
             colors = {
                 { 0, 0, 0, 0 },
-                { C.bg[1], C.bg[2], C.bg[3], 220 },
-            },
-        },
-    })
-
-    -- 顶部轻微遮罩（让标题更醒目）
-    startScreen_:AddChild(UI.Panel {
-        width    = "100%",
-        height   = "20%",
-        position = "absolute",
-        top      = 0,
-        left     = 0,
-        backgroundGradient = {
-            direction = "to-top",
-            colors = {
-                { 0, 0, 0, 0 },
-                { C.bg[1], C.bg[2], C.bg[3], 100 },
+                { 0, 0, 0, 160 },
             },
         },
     })
@@ -93,24 +86,23 @@ function M.Create(onEnter)
         alignItems     = "center",
     }
 
-    ------ 上部: 标题区域 ------
+    ------ 上部: 标题区域（透明底图片） ------
     contentPanel:AddChild(UI.Panel {
         width      = "100%",
         alignItems = "center",
-        paddingTop = 60,
-        gap        = 6,
+        paddingTop = 40,
+        gap        = 4,
         children = {
-            UI.Label {
-                text       = "三国神将录",
-                fontSize   = 36,
-                fontColor  = C.gold,
-                fontWeight = "bold",
-                textAlign  = "center",
+            UI.Image {
+                src    = "image/title_logo_20260421153613.png",
+                width  = 360,
+                height = 200,
+                objectFit = "contain",
             },
             UI.Label {
                 text       = "百将争雄  逐鹿天下",
-                fontSize   = 14,
-                fontColor  = C.textDim,
+                fontSize   = 13,
+                fontColor  = { 220, 200, 150, 200 },
                 textAlign  = "center",
             },
         },
@@ -137,26 +129,24 @@ function M.Create(onEnter)
         children       = { serverSlot_ },
     }
 
-    enterBtn_ = UI.Button {
-        text                   = "进入游戏",
-        fontSize               = 16,
-        fontWeight             = "bold",
-        width                  = 200,
-        height                 = 48,
-        textColor              = C.text,
-        backgroundImage        = "Textures/ui/btn_primary.png",
-        backgroundFit          = "sliced",
-        backgroundSlice        = { top = 16, right = 16, bottom = 16, left = 16 },
-        backgroundColor        = { 0, 0, 0, 0 },
-        hoverBackgroundColor   = { 255, 255, 255, 20 },
-        pressedBackgroundColor = { 0, 0, 0, 40 },
-        borderRadius           = 24,
-        opacity                = 0.4,
-        disabled               = true,
-        transition             = "opacity 0.3s easeOut",
-        onClick = function()
+    enterBtn_ = UI.Panel {
+        width          = 220,
+        height         = 62,
+        alignItems     = "center",
+        justifyContent = "center",
+        opacity        = 0.4,
+        cursor         = "pointer",
+        transition     = "opacity 0.3s easeOut",
+        children = {
+            UI.Image {
+                src       = "image/btn_enter_20260421153715.png",
+                width     = 220,
+                height    = 62,
+                objectFit = "contain",
+            },
+        },
+        onPress = function()
             if not enterEnabled_ then return end
-            M.Hide()
             if onEnterCallback_ then
                 onEnterCallback_()
             end
@@ -221,8 +211,7 @@ end
 function M.SetEnterEnabled(enabled)
     enterEnabled_ = enabled
     if enterBtn_ then
-        enterBtn_.disabled = not enabled
-        enterBtn_:SetStyle({ opacity = enabled and 1 or 0.4 })
+        enterBtn_:SetStyle({ opacity = enabled and 1.0 or 0.4 })
     end
 end
 
