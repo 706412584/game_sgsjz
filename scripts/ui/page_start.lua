@@ -11,19 +11,18 @@ local onEnterCallback_ = nil
 local enterBtn_        = nil
 local enterEnabled_    = false
 
--- 帧动画状态
-local emberPanel_  = nil
-local EMBER_FRAMES = {
+-- 帧动画状态（4 个独立 Panel，切换可见性）
+local EMBER_IMAGES = {
     "image/embers_f1_20260421160716.png",
     "image/embers_f2_20260421160810.png",
     "image/embers_f3_20260421160808.png",
     "image/embers_f4_20260421160813.png",
 }
-local FRAME_COUNT   = #EMBER_FRAMES
-local FRAME_TIME    = 0.18   -- 每帧持续时间 (秒)，~5.5fps
+local FRAME_COUNT   = #EMBER_IMAGES
+local FRAME_TIME    = 0.18
+local emberPanels_  = {}     -- 4 个帧 Panel
 local frameTimer_   = 0
 local frameIndex_   = 1
-local breathTimer_  = 0      -- 呼吸闪烁计时器
 
 --- 创建开始界面覆盖层
 ---@param onEnter fun()
@@ -33,7 +32,7 @@ function M.Create(onEnter)
     enterEnabled_ = false
     frameTimer_  = 0
     frameIndex_  = 1
-    breathTimer_ = 0
+    emberPanels_ = {}
 
     startScreen_ = UI.Panel {
         id            = "start_screen",
@@ -67,17 +66,25 @@ function M.Create(onEnter)
         backgroundColor = { 40, 15, 5, 30 },
     })
 
-    -- 3) 火星帧动画图层（单 Panel，切换 backgroundImage）
-    emberPanel_ = UI.Panel {
-        backgroundImage = EMBER_FRAMES[1],
-        backgroundFit   = "cover",
-        width           = "100%",
-        height          = "100%",
-        position        = "absolute",
-        top = 0, left = 0,
-        opacity         = 0.7,
-    }
-    startScreen_:AddChild(emberPanel_)
+    -- 3) 火星帧动画（4 个独立 Panel，切换可见性）
+    for i = 1, FRAME_COUNT do
+        local visible = (i == 1)
+        local p = UI.Panel {
+            backgroundImage = EMBER_IMAGES[i],
+            backgroundFit   = "cover",
+            width           = "100%",
+            height          = "100%",
+            position        = "absolute",
+            top = 0, left = 0,
+            opacity         = 0.7,
+        }
+        if not visible then
+            p:SetVisible(false)
+            YGNodeStyleSetDisplay(p.node, YGDisplayNone)
+        end
+        emberPanels_[i] = p
+        startScreen_:AddChild(p)
+    end
 
     -- 4) 底部火光渐变（暖橙色，模拟篝火映照）
     startScreen_:AddChild(UI.Panel {
@@ -204,24 +211,26 @@ function M.Create(onEnter)
     return startScreen_
 end
 
---- 每帧更新火星帧动画 + 呼吸闪烁
+--- 每帧更新火星帧动画（切换 Panel 可见性）
 ---@param dt number
 function M.Update(dt)
     if not startScreen_ or not M.IsVisible() then return end
-    if not emberPanel_ then return end
+    if #emberPanels_ == 0 then return end
 
-    -- 帧动画切换
     frameTimer_ = frameTimer_ + dt
     if frameTimer_ >= FRAME_TIME then
         frameTimer_ = frameTimer_ - FRAME_TIME
+        -- 隐藏当前帧
+        local cur = emberPanels_[frameIndex_]
+        cur:SetVisible(false)
+        YGNodeStyleSetDisplay(cur.node, YGDisplayNone)
+        -- 前进到下一帧
         frameIndex_ = frameIndex_ % FRAME_COUNT + 1
-        emberPanel_:SetStyle({ backgroundImage = EMBER_FRAMES[frameIndex_] })
+        -- 显示新帧
+        local nxt = emberPanels_[frameIndex_]
+        nxt:SetVisible(true)
+        YGNodeStyleSetDisplay(nxt.node, YGDisplayFlex)
     end
-
-    -- 呼吸闪烁（opacity 在 0.5~0.85 之间缓慢波动）
-    breathTimer_ = breathTimer_ + dt
-    local breath = 0.55 + 0.30 * math.sin(breathTimer_ * 1.0)
-    emberPanel_:SetStyle({ opacity = breath })
 end
 
 -- 公开 API
