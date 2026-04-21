@@ -1,8 +1,4 @@
-------------------------------------------------------------
--- client_main.lua  —— 三国神将录 客户端入口
--- C/S 架构：网络模式通过 GAME_ACTION 与服务端交互
--- 单机模式兼容：直接调用 State + BattleEngine
-------------------------------------------------------------
+-- client_main.lua — 三国神将录 客户端入口 (C/S + 单机兼容)
 require "LuaScripts/Utilities/Sample"
 
 local UI     = require("urhox-libs/UI")
@@ -15,18 +11,20 @@ local HeroesPage    = require("ui.page_heroes")
 local BattlePage    = require("ui.page_battle")
 local FormationPage = require("ui.page_formation")
 local Modal         = require("ui.modal_manager")
+local StartPage     = require("ui.page_start")
+local ServerUI      = require("ui.page_server")
 local DM            = require("data.data_maps")
 local DH            = require("data.data_heroes")
 local State          = require("data.data_state")
 local C = Theme.colors
 local S = Theme.sizes
 
-------------------------------------------------------------
--- 网络 / 单机模式判断
-------------------------------------------------------------
+-- 网络 / 单机
 local isNetworkMode_ = false
 local ClientNet      = nil
-local BattleEngine   = nil  -- 仅单机模式加载
+local BattleEngine   = nil
+local gameInitReady_   = false
+local serverSelected_  = false
 
 local function initNetworkOrStandalone()
     if IsNetworkMode and IsNetworkMode() then
@@ -36,32 +34,22 @@ local function initNetworkOrStandalone()
     else
         isNetworkMode_ = false
         BattleEngine = require("data.battle_engine")
-        -- 单机模式: 加载或创建本地存档
         local saved = State.Load()
         State.state = saved or State.CreateDefaultState()
         print("[客户端] 单机模式, power=" .. (State.state.power or 0))
     end
 end
 
-------------------------------------------------------------
--- 获取当前状态的便捷函数
-------------------------------------------------------------
-local function gs()
-    return State.state
-end
+local function gs() return State.state end
 
-------------------------------------------------------------
 -- 页面管理
-------------------------------------------------------------
 local currentPage_    = ""
 local previousPage_   = "city"
 local contentContainer_
 local overlayContainer_
 local backButton_
 
-------------------------------------------------------------
 -- 切换页面
-------------------------------------------------------------
 local function switchPage(pageId)
     if currentPage_ == pageId then return end
     previousPage_ = currentPage_
@@ -202,11 +190,7 @@ local function switchPage(pageId)
     print("[三国神将录] 切换页面: " .. pageId)
 end
 
-------------------------------------------------------------
--- 网络事件处理
-------------------------------------------------------------
-
---- 处理服务端即时事件
+-- 处理服务端即时事件
 local function handleGameEvt(evtType, data)
     if evtType == "battle_result" then
         -- 收到战斗结果: 显示战斗回放
@@ -253,7 +237,20 @@ local function handleGameEvt(evtType, data)
     end
 end
 
---- 进入游戏（网络模式: GameInit 到达后调用）
+--- 从开始界面进入游戏（双线汇合后调用）
+local function enterGameFromStart()
+    -- 隐藏开始界面
+    StartPage.Hide()
+    HUD.Update(gs())
+    switchPage("city")
+
+    if isNetworkMode_ then
+        ClientNet.SendAction("game_start")
+    end
+    print("[三国神将录] 进入游戏")
+end
+
+--- 进入游戏（非开始界面场景：重连/换服后直接进入）
 local function enterGame()
     HUD.Update(gs())
     switchPage("city")
@@ -264,9 +261,21 @@ local function enterGame()
     print("[三国神将录] 进入游戏")
 end
 
-------------------------------------------------------------
--- Start / Stop
-------------------------------------------------------------
+--- 回到开始界面（被踢/断线恢复等）
+local function returnToStartScreen()
+    gameInitReady_  = false
+    serverSelected_ = false
+    currentPage_    = ""
+    if contentContainer_ then
+        contentContainer_:ClearChildren()
+    end
+    Modal.CloseAll()
+    StartPage.Show()
+    StartPage.SetEnterEnabled(false)
+    -- 重新拉取区服列表
+    ServerUI.ResetSelection()
+    ServerUI.FetchServerList()
+end
 
 function Start()
     SampleStart()
@@ -332,6 +341,24 @@ function Start()
         overflow      = "hidden",
     }
 
+    -- 开始界面覆盖层（网络模式显示，单机模式也短暂显示）
+    local startPanel = StartPage.Create(function()
+        -- "进入游戏" 按钮点击回调
+        if isNetworkMode_ then
+            -- 网络模式: 等 GameInit 到达再进入
+            if gameInitReady_ then
+                enterGameFromStart()
+            else
+                -- GameInit 尚未到达，按钮会被禁用，不应触发
+                print("[客户端] 等待 GameInit...")
+            end
+        else
+            -- 单机模式: 直接进入
+            StartPage.Hide()
+            enterGame()
+        end
+    end)
+
     -- 主布局
     local root = UI.SafeAreaView {
         width           = "100%",
@@ -343,6 +370,7 @@ function Start()
             contentContainer_,
             backButton_,
             overlayContainer_,
+            startPanel,
         },
     }
     UI.SetRoot(root)
@@ -350,29 +378,63 @@ function Start()
     -- 状态变更 → 自动刷新 HUD
     State.onStateChanged = function()
         HUD.Update(gs())
-        -- 刷新当前页面（地图页需更新星级）
         if currentPage_ == "map" then
             MapPage.Refresh(gs())
         end
     end
 
-    -- 网络模式: 初始化网络并等 GameInit
+    -- 网络模式: 初始化网络、区服、开始界面
     if isNetworkMode_ then
         ClientNet.Init()
+        ServerUI.Init()
+
+        -- 在开始界面嵌入区服选择控件
+        local slot = StartPage.GetServerSlot()
+        if slot then
+            ServerUI.SetupStartScreenSlot(slot)
+        end
+
+        -- 区服列表回调
+        ClientNet.OnServerList(function(list)
+            ServerUI.OnServerListResp(list)
+        end)
+
+        -- 选服完成 → 标记 + 解锁按钮
+        ServerUI.OnServerReady(function()
+            serverSelected_ = true
+            -- 如果 GameInit 也到了，直接解锁按钮
+            if gameInitReady_ then
+                StartPage.SetEnterEnabled(true)
+            end
+        end)
 
         -- GameEvt 事件路由
         ClientNet.OnGameEvt(handleGameEvt)
 
-        -- GameInit 到达后进入游戏
+        -- GameInit 到达
         ClientNet.OnGameInit(function()
-            print("[客户端] GameInit 到达, 进入游戏")
-            enterGame()
+            print("[客户端] GameInit 到达")
+            gameInitReady_ = true
+            -- 如果还在开始界面，解锁按钮等用户点击
+            if StartPage.IsVisible() then
+                if serverSelected_ then
+                    StartPage.SetEnterEnabled(true)
+                end
+            else
+                -- 不在开始界面（重连），直接刷新
+                enterGame()
+            end
         end)
 
         -- 换服回调
         ClientNet.OnServerSwitch(function()
             print("[客户端] 换服完成, 刷新界面")
-            enterGame()
+            gameInitReady_ = true
+            if StartPage.IsVisible() then
+                StartPage.SetEnterEnabled(true)
+            else
+                enterGame()
+            end
         end)
 
         -- 断线回调
@@ -391,14 +453,21 @@ function Start()
             local msg = "已被踢出游戏"
             if reason == "duplicate_login" then
                 msg = "账号在其他设备登录"
+            elseif reason == "load_failed" then
+                msg = "数据加载失败，请重试"
             end
-            Modal.Alert("下线通知", msg)
+            Modal.Alert("下线通知", msg, function()
+                returnToStartScreen()
+            end)
         end)
 
-        print("[客户端] 等待服务端 GameInit...")
+        -- 首次拉取区服列表
+        ServerUI.FetchServerList()
+
+        print("[客户端] 开始界面已显示, 等待选服+GameInit...")
     else
-        -- 单机模式: 直接进入
-        enterGame()
+        -- 单机模式: 显示开始界面，立即可点击
+        StartPage.SetEnterEnabled(true)
     end
 
     SampleInitMouseMode(MM_FREE)
@@ -409,6 +478,11 @@ end
 ---@param eventData UpdateEventData
 function HandleUpdate(eventType, eventData)
     local dt = eventData["TimeStep"]:GetFloat()
+
+    -- 区服列表重试轮询
+    if isNetworkMode_ then
+        ServerUI.Update(dt)
+    end
 
     if currentPage_ == "battle" then
         BattlePage.Update(dt)
