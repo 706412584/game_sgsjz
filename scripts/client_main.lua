@@ -1,7 +1,7 @@
 ------------------------------------------------------------
 -- client_main.lua  —— 三国神将录 客户端入口
--- 主城界面 → 建筑功能 → 弹窗系统
--- Phase 2：接入真实战斗引擎 + 阵容编辑
+-- C/S 架构：网络模式通过 GAME_ACTION 与服务端交互
+-- 单机模式兼容：直接调用 State + BattleEngine
 ------------------------------------------------------------
 require "LuaScripts/Utilities/Sample"
 
@@ -17,54 +17,47 @@ local FormationPage = require("ui.page_formation")
 local Modal         = require("ui.modal_manager")
 local DM            = require("data.data_maps")
 local DH            = require("data.data_heroes")
-local BattleEngine  = require("data.battle_engine")
+local State          = require("data.data_state")
 local C = Theme.colors
 local S = Theme.sizes
 
 ------------------------------------------------------------
--- 模拟玩家状态（Phase 1 用，后续由 data_state.lua 替代）
+-- 网络 / 单机模式判断
 ------------------------------------------------------------
-local gameState = {
-    power       = 2450,
-    copper      = 5000,
-    yuanbao     = 100,
-    stamina     = 115,
-    staminaMax  = 120,
-    currentMap  = 1,
-    nodeStars   = {},
-    clearedMaps = {},
-    heroes = {
-        lvbu         = { level = 10, evolve = 0, exp = 0 },
-        guanyu       = { level = 8,  evolve = 0, exp = 0 },
-        zhangfei     = { level = 7,  evolve = 0, exp = 0 },
-        zhaoyun      = { level = 9,  evolve = 0, exp = 0 },
-        zhugeliang   = { level = 6,  evolve = 0, exp = 0 },
-        sunshangxiang = { level = 7, evolve = 0, exp = 0 },
-        diaochan     = { level = 5,  evolve = 0, exp = 0 },
-        daqiao       = { level = 4,  evolve = 0, exp = 0 },
-        caiwenji     = { level = 5,  evolve = 0, exp = 0 },
-        zhenji       = { level = 6,  evolve = 0, exp = 0 },
-        huangzhong   = { level = 8,  evolve = 0, exp = 0 },
-        xiaohoudun   = { level = 7,  evolve = 0, exp = 0 },
-    },
-    lineup = {
-        formation = "feng_shi",
-        front = { "lvbu", "zhangfei" },
-        back  = { "zhugeliang", "guanyu", "zhaoyun" },
-    },
-    inventory  = {},
-    jianghun   = 0,
-    zhaomuling = 0,
-}
+local isNetworkMode_ = false
+local ClientNet      = nil
+local BattleEngine   = nil  -- 仅单机模式加载
+
+local function initNetworkOrStandalone()
+    if IsNetworkMode and IsNetworkMode() then
+        isNetworkMode_ = true
+        ClientNet = require("network.client_net")
+        print("[客户端] 网络模式")
+    else
+        isNetworkMode_ = false
+        BattleEngine = require("data.battle_engine")
+        -- 单机模式: 加载或创建本地存档
+        local saved = State.Load()
+        State.state = saved or State.CreateDefaultState()
+        print("[客户端] 单机模式, power=" .. (State.state.power or 0))
+    end
+end
+
+------------------------------------------------------------
+-- 获取当前状态的便捷函数
+------------------------------------------------------------
+local function gs()
+    return State.state
+end
 
 ------------------------------------------------------------
 -- 页面管理
 ------------------------------------------------------------
-local currentPage_ = ""
-local previousPage_ = "city"  -- 用于返回
+local currentPage_    = ""
+local previousPage_   = "city"
 local contentContainer_
-local overlayContainer_ -- 弹窗叠加层
-local backButton_       -- 返回按钮
+local overlayContainer_
+local backButton_
 
 ------------------------------------------------------------
 -- 切换页面
@@ -78,12 +71,10 @@ local function switchPage(pageId)
     contentContainer_:ClearChildren()
     Modal.CloseAll()
 
-    -- 返回按钮的显隐和文字
     local showBack = (pageId ~= "city")
     if backButton_ then
         backButton_:SetStyle({ opacity = showBack and 1 or 0 })
         backButton_.disabled = not showBack
-        -- 根据上下文显示不同返回文字
         if pageId == "formation" then
             backButton_.text = "← 返回"
         else
@@ -92,7 +83,7 @@ local function switchPage(pageId)
     end
 
     if pageId == "city" then
-        contentContainer_:AddChild(CityPage.Create(gameState, {
+        contentContainer_:AddChild(CityPage.Create(gs(), {
             onBuildingClick = function(buildingId, buildingInfo)
                 print("[主城] 点击建筑: " .. buildingId .. " - " .. buildingInfo.name)
                 if buildingId == "battle" then
@@ -102,12 +93,20 @@ local function switchPage(pageId)
                 elseif buildingId == "forge" then
                     Modal.Alert("铁匠铺", "锻造系统开发中，敬请期待！")
                 elseif buildingId == "recruit" then
-                    Modal.Confirm("招募", "消耗招募令 ×1 进行一次招募？", function()
-                        if gameState.zhaomuling > 0 then
-                            gameState.zhaomuling = gameState.zhaomuling - 1
-                            Modal.Alert("招募结果", "恭喜获得武将碎片 ×10！")
+                    Modal.Confirm("招募", "消耗招募令 x1 进行一次招募？", function()
+                        if isNetworkMode_ then
+                            ClientNet.SendAction("recruit")
                         else
-                            Modal.Alert("提示", "招募令不足！")
+                            local ok, heroId, info = State.DoRecruit(gs())
+                            if ok and info then
+                                local desc = info.type == "hero"
+                                    and ("恭喜获得武将: " .. info.name .. "！")
+                                    or  (info.name .. " 碎片 x" .. info.count)
+                                Modal.Alert("招募结果", desc)
+                            else
+                                Modal.Alert("提示", tostring(heroId))
+                            end
+                            HUD.Update(gs())
                         end
                     end)
                 elseif buildingId == "arena" then
@@ -119,60 +118,59 @@ local function switchPage(pageId)
         }))
 
     elseif pageId == "map" then
-        contentContainer_:AddChild(MapPage.Create(gameState, {
+        contentContainer_:AddChild(MapPage.Create(gs(), {
             onNodeClick = function(mapId, nodeId, nodeType)
                 if nodeType == "event" then
                     Modal.Alert("事件", "你发现了一个机关，获得铜钱 200！")
-                    gameState.copper = gameState.copper + 200
-                    HUD.Update(gameState)
+                    if isNetworkMode_ then
+                        -- TODO: 事件节点由服务端处理
+                    else
+                        gs().copper = gs().copper + 200
+                        HUD.Update(gs())
+                    end
                     return
                 end
                 if nodeType == "chest" then
-                    Modal.Alert("宝箱", "打开宝箱获得经验酒 ×3！")
-                    gameState.nodeStars[mapId .. "_" .. nodeId] = 3
-                    MapPage.Refresh(gameState)
+                    Modal.Alert("宝箱", "打开宝箱获得经验酒 x3！")
+                    if not isNetworkMode_ then
+                        gs().nodeStars[mapId .. "_" .. nodeId] = 3
+                        MapPage.Refresh(gs())
+                    end
                     return
                 end
-                -- 从数据表获取体力消耗
+
                 local cost = DM.NODE_STAMINA[nodeType] or 5
-                -- 显示战前信息（敌方战力预估）
                 local nodePower = DM.GetNodePower(mapId, nodeId) or 0
                 local confirmMsg = "消耗 " .. cost .. " 体力进入战斗\n"
                     .. "敌方预估战力: " .. Theme.FormatNumber(nodePower)
-                Modal.Confirm(
-                    "挑战确认",
-                    confirmMsg,
-                    function()
-                        if gameState.stamina < cost then
-                            Modal.Alert("提示", "体力不足！")
-                            return
-                        end
-                        gameState.stamina = gameState.stamina - cost
-                        HUD.Update(gameState)
+                Modal.Confirm("挑战确认", confirmMsg, function()
+                    if (gs().stamina or 0) < cost then
+                        Modal.Alert("提示", "体力不足！")
+                        return
+                    end
 
-                        -- 使用真实战斗引擎
-                        local log = BattleEngine.QuickBattle(gameState, mapId, nodeId, nodeType)
-                        print("[战斗引擎] 完成 map=" .. mapId .. " node=" .. nodeId
-                            .. " 回合=" .. log.totalRounds
-                            .. " 结果=" .. (log.result.win and "胜利" or "失败"))
-
+                    if isNetworkMode_ then
+                        ClientNet.SendAction("battle", {
+                            mapId = mapId, nodeId = nodeId, nodeType = nodeType,
+                        })
+                    else
+                        -- 单机模式: 本地战斗
+                        gs().stamina = gs().stamina - cost
+                        HUD.Update(gs())
+                        local log = BattleEngine.QuickBattle(gs(), mapId, nodeId, nodeType)
                         switchPage("battle")
                         contentContainer_:ClearChildren()
                         contentContainer_:AddChild(BattlePage.Create(log, {
                             onBattleEnd = function()
                                 if log.result.win then
-                                    local key = mapId .. "_" .. nodeId
-                                    local old = gameState.nodeStars[key] or 0
-                                    gameState.nodeStars[key] = math.max(old, log.result.stars)
-                                    gameState.copper = gameState.copper + (log.result.drops["铜钱"] or 0)
-                                    gameState.power  = gameState.power + math.random(10, 50)
+                                    State.ApplyBattleRewards(gs(), log)
                                 end
-                                HUD.Update(gameState)
+                                HUD.Update(gs())
                                 switchPage("map")
                             end,
                         }))
                     end
-                )
+                end)
             end,
             onFormationClick = function()
                 switchPage("formation")
@@ -180,21 +178,90 @@ local function switchPage(pageId)
         }))
 
     elseif pageId == "heroes" then
-        contentContainer_:AddChild(HeroesPage.Create(gameState, {}))
+        contentContainer_:AddChild(HeroesPage.Create(gs(), {}))
 
     elseif pageId == "formation" then
-        contentContainer_:AddChild(FormationPage.Create(gameState, {
+        contentContainer_:AddChild(FormationPage.Create(gs(), {
             onSave = function()
-                -- 阵容保存后更新战力
-                HUD.Update(gameState)
-                print("[阵容] 阵容已保存: 前排=" .. #gameState.lineup.front
-                    .. " 后排=" .. #gameState.lineup.back)
+                if isNetworkMode_ then
+                    ClientNet.SendAction("set_lineup", {
+                        formation = gs().lineup.formation,
+                        front     = gs().lineup.front,
+                        back      = gs().lineup.back,
+                    })
+                else
+                    State.RecalcPower(gs())
+                end
+                HUD.Update(gs())
+                print("[阵容] 阵容已保存: 前排=" .. #gs().lineup.front
+                    .. " 后排=" .. #gs().lineup.back)
             end,
         }))
-
     end
 
     print("[三国神将录] 切换页面: " .. pageId)
+end
+
+------------------------------------------------------------
+-- 网络事件处理
+------------------------------------------------------------
+
+--- 处理服务端即时事件
+local function handleGameEvt(evtType, data)
+    if evtType == "battle_result" then
+        -- 收到战斗结果: 显示战斗回放
+        local log = {
+            rounds      = data.rounds or {},
+            totalRounds = data.totalRounds or 0,
+            result = {
+                win         = data.win,
+                stars       = data.stars,
+                drops       = data.drops or {},
+                damageStats = data.damageStats or {},
+                healStats   = data.healStats or {},
+                allyAlive   = data.allyAlive or 0,
+                enemyAlive  = data.enemyAlive or 0,
+            },
+        }
+        switchPage("battle")
+        contentContainer_:ClearChildren()
+        contentContainer_:AddChild(BattlePage.Create(log, {
+            onBattleEnd = function()
+                HUD.Update(gs())
+                switchPage("map")
+            end,
+        }))
+
+    elseif evtType == "recruit_result" then
+        local info = data.info
+        if data.success and info then
+            local desc = info.type == "hero"
+                and ("恭喜获得武将: " .. info.name .. "！")
+                or  (info.name .. " 碎片 x" .. (info.count or 0))
+            Modal.Alert("招募结果", desc)
+        else
+            Modal.Alert("提示", tostring(data.heroId or "招募失败"))
+        end
+
+    elseif evtType == "action_result" then
+        if not data.success then
+            Modal.Alert("提示", data.msg or "操作失败")
+        end
+
+    elseif evtType == "error" then
+        Modal.Alert("错误", data.msg or "未知错误")
+    end
+end
+
+--- 进入游戏（网络模式: GameInit 到达后调用）
+local function enterGame()
+    HUD.Update(gs())
+    switchPage("city")
+
+    if isNetworkMode_ then
+        ClientNet.SendAction("game_start")
+    end
+    print("[三国神将录] 进入游戏")
 end
 
 ------------------------------------------------------------
@@ -204,7 +271,10 @@ end
 function Start()
     SampleStart()
 
-    -- 初始化 UI 系统
+    -- 判断网络/单机模式
+    initNetworkOrStandalone()
+
+    -- UI 初始化
     UI.Init({
         theme = Theme.uiTheme,
         fonts = {
@@ -213,18 +283,15 @@ function Start()
         scale = UI.Scale.DEFAULT,
     })
 
-    -- 弹窗叠加层（覆盖在所有内容之上）
+    -- 弹窗叠加层
     overlayContainer_ = UI.Panel {
         position = "absolute",
         top = 0, left = 0, right = 0, bottom = 0,
-        width  = "100%",
-        height = "100%",
+        width = "100%", height = "100%",
     }
-
-    -- 初始化弹窗管理器
     Modal.Init(overlayContainer_)
 
-    -- 返回按钮（左上角，叠加层下方）
+    -- 返回按钮
     backButton_ = UI.Button {
         text               = "← 返回主城",
         position           = "absolute",
@@ -246,7 +313,6 @@ function Start()
         disabled           = true,
         transition         = "opacity 0.2s easeOut",
         onClick = function()
-            -- 从阵容页返回到之前的页面(通常是map或heroes)
             if currentPage_ == "formation" then
                 local backTo = previousPage_
                 if backTo == "" or backTo == "formation" then backTo = "city" end
@@ -273,32 +339,70 @@ function Start()
         flexDirection   = "column",
         backgroundColor = C.bg,
         children = {
-            -- HUD 顶栏
             HUD.Create(),
-
-            -- 内容区
             contentContainer_,
-
-            -- 返回按钮（绝对定位在 HUD 下方）
             backButton_,
-
-            -- 弹窗叠加层（最顶层）
             overlayContainer_,
         },
     }
-
     UI.SetRoot(root)
 
-    -- 初始化 HUD 数值
-    HUD.Update(gameState)
+    -- 状态变更 → 自动刷新 HUD
+    State.onStateChanged = function()
+        HUD.Update(gs())
+        -- 刷新当前页面（地图页需更新星级）
+        if currentPage_ == "map" then
+            MapPage.Refresh(gs())
+        end
+    end
 
-    -- 默认显示主城
-    switchPage("city")
+    -- 网络模式: 初始化网络并等 GameInit
+    if isNetworkMode_ then
+        ClientNet.Init()
 
-    -- 设置鼠标模式
+        -- GameEvt 事件路由
+        ClientNet.OnGameEvt(handleGameEvt)
+
+        -- GameInit 到达后进入游戏
+        ClientNet.OnGameInit(function()
+            print("[客户端] GameInit 到达, 进入游戏")
+            enterGame()
+        end)
+
+        -- 换服回调
+        ClientNet.OnServerSwitch(function()
+            print("[客户端] 换服完成, 刷新界面")
+            enterGame()
+        end)
+
+        -- 断线回调
+        ClientNet.OnDisconnect(function()
+            Modal.Alert("断线提示", "与服务器断开连接，正在重连...")
+        end)
+
+        -- 重连回调
+        ClientNet.OnReconnect(function()
+            Modal.Alert("重连成功", "已恢复连接")
+            HUD.Update(gs())
+        end)
+
+        -- 被踢回调
+        ClientNet.OnKicked(function(reason)
+            local msg = "已被踢出游戏"
+            if reason == "duplicate_login" then
+                msg = "账号在其他设备登录"
+            end
+            Modal.Alert("下线通知", msg)
+        end)
+
+        print("[客户端] 等待服务端 GameInit...")
+    else
+        -- 单机模式: 直接进入
+        enterGame()
+    end
+
     SampleInitMouseMode(MM_FREE)
-
-    print("[三国神将录] 客户端启动完成 - Phase 2 战斗引擎")
+    print("[三国神将录] 客户端启动完成 - C/S 架构")
 end
 
 ---@param eventType string
@@ -306,12 +410,15 @@ end
 function HandleUpdate(eventType, eventData)
     local dt = eventData["TimeStep"]:GetFloat()
 
-    -- 更新战斗回放
     if currentPage_ == "battle" then
         BattlePage.Update(dt)
     end
 end
 
 function Stop()
+    -- 单机模式: 退出时保存
+    if not isNetworkMode_ and gs() then
+        State.Save(gs())
+    end
     UI.Shutdown()
 end

@@ -1,11 +1,20 @@
 ------------------------------------------------------------
 -- data/data_state.lua  —— 三国神将录 游戏状态管理
 -- 负责：存档读档、英雄升级/升星、资源增减、推图进度
+-- C/S 模式：服务端读写，客户端只读（通过 ApplyServerInit/Sync）
 ------------------------------------------------------------
 local DH = require("data.data_heroes")
 local DM = require("data.data_maps")
 
 local M = {}
+
+--- 当前游戏状态（客户端只读引用，服务端可写）
+---@type table|nil
+M.state = nil
+
+--- UI 刷新回调（客户端注册，状态变更后自动调用）
+---@type fun()|nil
+M.onStateChanged = nil
 
 ------------------------------------------------------------
 -- 常量
@@ -485,6 +494,56 @@ function M.UpdateStamina(state)
     if regenPoints > 0 and state.stamina < state.staminaMax then
         state.stamina = math.min(state.stamina + regenPoints, state.staminaMax)
         state.lastStaminaTime = state.lastStaminaTime + regenPoints * M.STAMINA_REGEN_SEC
+    end
+end
+
+------------------------------------------------------------
+-- C/S 同步接口（客户端调用）
+------------------------------------------------------------
+
+--- 兼容旧存档字段补丁
+---@param s table
+local function patchState(s)
+    s.inventory = s.inventory or {}
+    s.inventory.exp_wine = s.inventory.exp_wine or 0
+    s.inventory.star_stone = s.inventory.star_stone or 0
+    s.inventory.breakthrough = s.inventory.breakthrough or 0
+    s.inventory.awaken_stone = s.inventory.awaken_stone or 0
+    s.recruitPool = s.recruitPool or {}
+    s.lastStaminaTime = s.lastStaminaTime or 0
+    s.nodeStars = s.nodeStars or {}
+    s.clearedMaps = s.clearedMaps or {}
+    s.jianghun = s.jianghun or 0
+    s.zhaomuling = s.zhaomuling or 0
+    s.lineup = s.lineup or { formation = "feng_shi", front = {}, back = {} }
+    -- heroes 字段补丁
+    for _, h in pairs(s.heroes or {}) do
+        if h.star == nil then h.star = 1 end
+        if h.fragments == nil then h.fragments = 0 end
+    end
+end
+
+--- 首次登录/换服时接收服务端完整状态
+---@param stateTable table  服务端推送的完整 state
+function M.ApplyServerInit(stateTable)
+    patchState(stateTable)
+    M.state = stateTable
+    local heroCount = 0
+    for _ in pairs(stateTable.heroes or {}) do heroCount = heroCount + 1 end
+    print("[State] ApplyServerInit: power=" .. (stateTable.power or 0)
+        .. " heroes=" .. heroCount)
+    if M.onStateChanged then
+        M.onStateChanged()
+    end
+end
+
+--- 周期同步时接收服务端完整状态
+---@param stateTable table
+function M.ApplyServerSync(stateTable)
+    patchState(stateTable)
+    M.state = stateTable
+    if M.onStateChanged then
+        M.onStateChanged()
     end
 end
 
