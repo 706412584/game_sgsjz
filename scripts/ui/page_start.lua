@@ -11,15 +11,19 @@ local onEnterCallback_ = nil
 local enterBtn_        = nil
 local enterEnabled_    = false
 
--- 火星动画状态
-local emberA_    = nil   -- 火星图层 A
-local emberB_    = nil   -- 火星图层 B
-local offsetA_   = 0     -- A 层偏移 (px)
-local offsetB_   = 0     -- B 层偏移 (px)
-local SPEED_A    = 12    -- A 层漂移速度 (px/s)
-local SPEED_B    = 8     -- B 层漂移速度 (px/s)
-local RANGE      = 40    -- 最大偏移量 (px)
-local fadeTimer_ = 0     -- 呼吸闪烁计时器
+-- 帧动画状态
+local emberPanel_  = nil
+local EMBER_FRAMES = {
+    "image/embers_f1_20260421160716.png",
+    "image/embers_f2_20260421160810.png",
+    "image/embers_f3_20260421160808.png",
+    "image/embers_f4_20260421160813.png",
+}
+local FRAME_COUNT   = #EMBER_FRAMES
+local FRAME_TIME    = 0.18   -- 每帧持续时间 (秒)，~5.5fps
+local frameTimer_   = 0
+local frameIndex_   = 1
+local breathTimer_  = 0      -- 呼吸闪烁计时器
 
 --- 创建开始界面覆盖层
 ---@param onEnter fun()
@@ -27,9 +31,9 @@ local fadeTimer_ = 0     -- 呼吸闪烁计时器
 function M.Create(onEnter)
     onEnterCallback_ = onEnter
     enterEnabled_ = false
-    offsetA_ = 0
-    offsetB_ = 0
-    fadeTimer_ = 0
+    frameTimer_  = 0
+    frameIndex_  = 1
+    breathTimer_ = 0
 
     startScreen_ = UI.Panel {
         id            = "start_screen",
@@ -63,9 +67,9 @@ function M.Create(onEnter)
         backgroundColor = { 40, 15, 5, 30 },
     })
 
-    -- 3) 火星图层 A（稀疏大颗粒，缓慢向上漂移）
-    emberA_ = UI.Panel {
-        backgroundImage = "image/embers_a_20260421160220.png",
+    -- 3) 火星帧动画图层（单 Panel，切换 backgroundImage）
+    emberPanel_ = UI.Panel {
+        backgroundImage = EMBER_FRAMES[1],
         backgroundFit   = "cover",
         width           = "100%",
         height          = "100%",
@@ -73,21 +77,9 @@ function M.Create(onEnter)
         top = 0, left = 0,
         opacity         = 0.7,
     }
-    startScreen_:AddChild(emberA_)
+    startScreen_:AddChild(emberPanel_)
 
-    -- 4) 火星图层 B（细密小火花，稍快漂移，半透明）
-    emberB_ = UI.Panel {
-        backgroundImage = "image/embers_b_20260421160309.png",
-        backgroundFit   = "cover",
-        width           = "100%",
-        height          = "100%",
-        position        = "absolute",
-        top = 0, left = 0,
-        opacity         = 0.4,
-    }
-    startScreen_:AddChild(emberB_)
-
-    -- 5) 底部火光渐变（暖橙色，模拟地面篝火映照）
+    -- 4) 底部火光渐变（暖橙色，模拟篝火映照）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
         height   = "35%",
@@ -103,7 +95,7 @@ function M.Create(onEnter)
         },
     })
 
-    -- 6) 底部深色遮罩（让按钮文字可读）
+    -- 5) 底部深色遮罩（让按钮文字可读）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
         height   = "25%",
@@ -212,40 +204,27 @@ function M.Create(onEnter)
     return startScreen_
 end
 
-------------------------------------------------------------
--- 动画更新（由 client_main HandleUpdate 调用）
-------------------------------------------------------------
-
---- 每帧更新火星漂移动画
+--- 每帧更新火星帧动画 + 呼吸闪烁
 ---@param dt number
 function M.Update(dt)
     if not startScreen_ or not M.IsVisible() then return end
+    if not emberPanel_ then return end
 
-    -- 火星层 A: 缓慢向上漂移
-    offsetA_ = offsetA_ + SPEED_A * dt
-    if offsetA_ >= RANGE then offsetA_ = 0 end
-
-    -- 火星层 B: 稍快向上漂移
-    offsetB_ = offsetB_ + SPEED_B * dt
-    if offsetB_ >= RANGE then offsetB_ = 0 end
-
-    -- 呼吸闪烁（opacity 在 0.5~0.8 之间缓慢波动）
-    fadeTimer_ = fadeTimer_ + dt
-    local breathA = 0.55 + 0.25 * math.sin(fadeTimer_ * 1.2)
-    local breathB = 0.30 + 0.20 * math.sin(fadeTimer_ * 0.8 + 1.5)
-
-    if emberA_ then
-        emberA_:SetStyle({ top = -offsetA_, opacity = breathA })
+    -- 帧动画切换
+    frameTimer_ = frameTimer_ + dt
+    if frameTimer_ >= FRAME_TIME then
+        frameTimer_ = frameTimer_ - FRAME_TIME
+        frameIndex_ = frameIndex_ % FRAME_COUNT + 1
+        emberPanel_:SetStyle({ backgroundImage = EMBER_FRAMES[frameIndex_] })
     end
-    if emberB_ then
-        emberB_:SetStyle({ top = -offsetB_, opacity = breathB })
-    end
+
+    -- 呼吸闪烁（opacity 在 0.5~0.85 之间缓慢波动）
+    breathTimer_ = breathTimer_ + dt
+    local breath = 0.55 + 0.30 * math.sin(breathTimer_ * 1.0)
+    emberPanel_:SetStyle({ opacity = breath })
 end
 
-------------------------------------------------------------
 -- 公开 API
-------------------------------------------------------------
-
 function M.Show()
     if startScreen_ then
         startScreen_:SetVisible(true)
