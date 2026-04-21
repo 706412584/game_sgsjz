@@ -1,34 +1,35 @@
-------------------------------------------------------------
--- ui/page_start.lua  —— 三国神将录 开始界面
--- 全屏覆盖层 (zIndex=900)，显示在游戏 UI 之上
--- 包含：背景图 + 游戏标题 + 区服选择插槽 + 进入游戏按钮
-------------------------------------------------------------
+-- ui/page_start.lua — 三国神将录 开始界面 (zIndex=900)
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
 local C     = Theme.colors
 
 local M = {}
 
----@type table|nil
-local startScreen_ = nil
----@type table|nil
-local serverSlot_  = nil
----@type fun()|nil
+local startScreen_     = nil
+local serverSlot_      = nil
 local onEnterCallback_ = nil
----@type table|nil
-local enterBtn_ = nil
-local enterEnabled_ = false
+local enterBtn_        = nil
+local enterEnabled_    = false
 
-------------------------------------------------------------
--- 创建开始界面
-------------------------------------------------------------
+-- 火星动画状态
+local emberA_    = nil   -- 火星图层 A
+local emberB_    = nil   -- 火星图层 B
+local offsetA_   = 0     -- A 层偏移 (px)
+local offsetB_   = 0     -- B 层偏移 (px)
+local SPEED_A    = 12    -- A 层漂移速度 (px/s)
+local SPEED_B    = 8     -- B 层漂移速度 (px/s)
+local RANGE      = 40    -- 最大偏移量 (px)
+local fadeTimer_ = 0     -- 呼吸闪烁计时器
 
 --- 创建开始界面覆盖层
----@param onEnter fun()  点击"进入游戏"后的回调
+---@param onEnter fun()
 ---@return table panel
 function M.Create(onEnter)
     onEnterCallback_ = onEnter
     enterEnabled_ = false
+    offsetA_ = 0
+    offsetB_ = 0
+    fadeTimer_ = 0
 
     startScreen_ = UI.Panel {
         id            = "start_screen",
@@ -43,7 +44,7 @@ function M.Create(onEnter)
         backgroundColor = C.bg,
     }
 
-    -- 纯净背景图（已去除 UI/文字）
+    -- 1) 纯净背景图
     startScreen_:AddChild(UI.Panel {
         backgroundImage = "image/edited_bg_start_clean_20260421153502.png",
         backgroundFit   = "cover",
@@ -53,19 +54,59 @@ function M.Create(onEnter)
         top = 0, left = 0,
     })
 
-    -- 全屏暗色遮罩（90%透明 = alpha 25/255）
+    -- 2) 暖色调遮罩（战火氛围）
     startScreen_:AddChild(UI.Panel {
         width           = "100%",
         height          = "100%",
         position        = "absolute",
         top = 0, left = 0,
-        backgroundColor = { 0, 0, 0, 25 },
+        backgroundColor = { 40, 15, 5, 30 },
     })
 
-    -- 底部渐变遮罩（让下方按钮更清晰）
+    -- 3) 火星图层 A（稀疏大颗粒，缓慢向上漂移）
+    emberA_ = UI.Panel {
+        backgroundImage = "image/embers_a_20260421160220.png",
+        backgroundFit   = "cover",
+        width           = "100%",
+        height          = "100%",
+        position        = "absolute",
+        top = 0, left = 0,
+        opacity         = 0.7,
+    }
+    startScreen_:AddChild(emberA_)
+
+    -- 4) 火星图层 B（细密小火花，稍快漂移，半透明）
+    emberB_ = UI.Panel {
+        backgroundImage = "image/embers_b_20260421160309.png",
+        backgroundFit   = "cover",
+        width           = "100%",
+        height          = "100%",
+        position        = "absolute",
+        top = 0, left = 0,
+        opacity         = 0.4,
+    }
+    startScreen_:AddChild(emberB_)
+
+    -- 5) 底部火光渐变（暖橙色，模拟地面篝火映照）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
-        height   = "40%",
+        height   = "35%",
+        position = "absolute",
+        bottom   = 0,
+        left     = 0,
+        backgroundGradient = {
+            direction = "to-bottom",
+            colors = {
+                { 0, 0, 0, 0 },
+                { 30, 10, 0, 180 },
+            },
+        },
+    })
+
+    -- 6) 底部深色遮罩（让按钮文字可读）
+    startScreen_:AddChild(UI.Panel {
+        width    = "100%",
+        height   = "25%",
         position = "absolute",
         bottom   = 0,
         left     = 0,
@@ -86,18 +127,18 @@ function M.Create(onEnter)
         alignItems     = "center",
     }
 
-    ------ 上部: 标题区域（透明底图片） ------
+    -- 上部: 标题
     contentPanel:AddChild(UI.Panel {
         width      = "100%",
         alignItems = "center",
         paddingTop = 40,
         gap        = 4,
         children = {
-            UI.Image {
-                src    = "image/title_logo_20260421153613.png",
-                width  = 360,
-                height = 200,
-                objectFit = "contain",
+            UI.Panel {
+                backgroundImage = "image/title_logo_20260421153613.png",
+                backgroundFit   = "contain",
+                width           = 360,
+                height          = 200,
             },
             UI.Label {
                 text       = "百将争雄  逐鹿天下",
@@ -108,7 +149,7 @@ function M.Create(onEnter)
         },
     })
 
-    ------ 下部: 区服+进入按钮 ------
+    -- 下部: 区服+进入按钮
     serverSlot_ = UI.Panel {
         id             = "start_server_slot",
         alignItems     = "center",
@@ -116,17 +157,16 @@ function M.Create(onEnter)
         height         = 36,
     }
 
-    -- 区服选择背景面板
     local serverBg = UI.Panel {
-        alignItems     = "center",
-        justifyContent = "center",
+        alignItems        = "center",
+        justifyContent    = "center",
         paddingHorizontal = 16,
         paddingVertical   = 6,
-        borderRadius   = 16,
-        backgroundColor = { C.bg[1], C.bg[2], C.bg[3], 180 },
-        borderColor    = C.border,
-        borderWidth    = 1,
-        children       = { serverSlot_ },
+        borderRadius      = 16,
+        backgroundColor   = { C.bg[1], C.bg[2], C.bg[3], 180 },
+        borderColor       = C.border,
+        borderWidth       = 1,
+        children          = { serverSlot_ },
     }
 
     enterBtn_ = UI.Panel {
@@ -138,18 +178,16 @@ function M.Create(onEnter)
         cursor         = "pointer",
         transition     = "opacity 0.3s easeOut",
         children = {
-            UI.Image {
-                src       = "image/btn_enter_20260421153715.png",
-                width     = 220,
-                height    = 62,
-                objectFit = "contain",
+            UI.Panel {
+                backgroundImage = "image/btn_enter_20260421153715.png",
+                backgroundFit   = "contain",
+                width           = 220,
+                height          = 62,
             },
         },
         onPress = function()
             if not enterEnabled_ then return end
-            if onEnterCallback_ then
-                onEnterCallback_()
-            end
+            if onEnterCallback_ then onEnterCallback_() end
         end,
     }
 
@@ -175,10 +213,39 @@ function M.Create(onEnter)
 end
 
 ------------------------------------------------------------
+-- 动画更新（由 client_main HandleUpdate 调用）
+------------------------------------------------------------
+
+--- 每帧更新火星漂移动画
+---@param dt number
+function M.Update(dt)
+    if not startScreen_ or not M.IsVisible() then return end
+
+    -- 火星层 A: 缓慢向上漂移
+    offsetA_ = offsetA_ + SPEED_A * dt
+    if offsetA_ >= RANGE then offsetA_ = 0 end
+
+    -- 火星层 B: 稍快向上漂移
+    offsetB_ = offsetB_ + SPEED_B * dt
+    if offsetB_ >= RANGE then offsetB_ = 0 end
+
+    -- 呼吸闪烁（opacity 在 0.5~0.8 之间缓慢波动）
+    fadeTimer_ = fadeTimer_ + dt
+    local breathA = 0.55 + 0.25 * math.sin(fadeTimer_ * 1.2)
+    local breathB = 0.30 + 0.20 * math.sin(fadeTimer_ * 0.8 + 1.5)
+
+    if emberA_ then
+        emberA_:SetStyle({ top = -offsetA_, opacity = breathA })
+    end
+    if emberB_ then
+        emberB_:SetStyle({ top = -offsetB_, opacity = breathB })
+    end
+end
+
+------------------------------------------------------------
 -- 公开 API
 ------------------------------------------------------------
 
---- 显示开始界面
 function M.Show()
     if startScreen_ then
         startScreen_:SetVisible(true)
@@ -186,7 +253,6 @@ function M.Show()
     end
 end
 
---- 隐藏开始界面
 function M.Hide()
     if startScreen_ then
         startScreen_:SetVisible(false)
@@ -194,19 +260,16 @@ function M.Hide()
     end
 end
 
---- 是否可见
 ---@return boolean
 function M.IsVisible()
     return startScreen_ ~= nil and startScreen_:IsVisible()
 end
 
---- 获取区服插槽（供 page_server.lua 嵌入区服选择控件）
 ---@return table|nil
 function M.GetServerSlot()
     return serverSlot_
 end
 
---- 设置进入按钮可用状态
 ---@param enabled boolean
 function M.SetEnterEnabled(enabled)
     enterEnabled_ = enabled

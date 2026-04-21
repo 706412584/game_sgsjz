@@ -479,6 +479,9 @@ end
 function HandleUpdate(eventType, eventData)
     local dt = eventData["TimeStep"]:GetFloat()
 
+    -- 开始界面火星动画
+    StartPage.Update(dt)
+
     -- 区服列表重试轮询
     if isNetworkMode_ then
         ServerUI.Update(dt)
