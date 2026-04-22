@@ -71,9 +71,9 @@ local function switchPage(pageId)
         backButton_:SetStyle({ opacity = showBack and 1 or 0 })
         backButton_.disabled = not showBack
         if pageId == "formation" then
-            backButton_.text = "← 返回"
+            backButton_.text = "返回"
         else
-            backButton_.text = "← 返回主城"
+            backButton_.text = "返回主城"
         end
     end
 
@@ -469,24 +469,24 @@ function Start()
     }
     Modal.Init(overlayContainer_)
 
-    -- 返回按钮
+    -- 返回按钮（使用翡翠金框贴图，与 SanButton primary 一致）
     backButton_ = UI.Button {
-        text               = "← 返回主城",
+        text               = "返回主城",
         position           = "absolute",
         top                = 52,
-        left               = 8,
-        height             = 32,
-        paddingHorizontal  = 12,
-        fontSize           = 12,
+        left               = 12,
+        height             = S.btnHeight,
+        paddingHorizontal  = 20,
+        fontSize           = S.btnFontSize,
         fontWeight         = "bold",
         textColor          = C.text,
-        backgroundImage    = "Textures/ui/btn_secondary.png",
+        backgroundImage    = "Textures/ui/btn_primary.png",
         backgroundFit      = "sliced",
-        backgroundSlice    = { top = 10, right = 10, bottom = 10, left = 10 },
+        backgroundSlice    = { top = 16, right = 16, bottom = 16, left = 16 },
         backgroundColor    = { 0, 0, 0, 0 },
-        hoverBackgroundColor = { 255, 255, 255, 30 },
+        hoverBackgroundColor = { 255, 255, 255, 20 },
         pressedBackgroundColor = { 0, 0, 0, 40 },
-        borderRadius       = 6,
+        borderRadius       = S.btnRadius,
         opacity            = 0,
         disabled           = true,
         transition         = "opacity 0.2s easeOut",
