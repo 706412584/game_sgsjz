@@ -26,10 +26,10 @@ local totalLabel_    = nil
 local resultArea_    = nil
 
 ------------------------------------------------------------
--- 品质色辅助 (data_heroes quality → theme quality+1)
+-- 品质色辅助
 ------------------------------------------------------------
 local function qColor(q)
-    return Theme.QualityColor((q or 3) + 1)
+    return Theme.HeroQualityColor(q or 3)
 end
 
 local function qName(q)
@@ -166,7 +166,7 @@ local function createResultCard(info)
             Comp.HeroAvatar {
                 heroId  = heroId,
                 size    = 56,
-                quality = (info.quality or 3) + 1,
+                quality = info.quality or 3,
             },
             -- 名字
             UI.Label {

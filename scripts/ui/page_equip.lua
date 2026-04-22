@@ -25,10 +25,10 @@ local selectedSlot_           -- 当前选中的槽位
 local selectedBagIndex_       -- 当前选中的背包索引
 
 ------------------------------------------------------------
--- 品质边框色（复用 theme 品质色, +1 偏移）
+-- 品质边框色
 ------------------------------------------------------------
 local function equipQColor(quality)
-    return Theme.QualityColor(quality + 1)
+    return Theme.HeroQualityColor(quality)
 end
 
 ------------------------------------------------------------
@@ -71,7 +71,7 @@ local function createHeroCard(heroId, heroState)
             Comp.HeroAvatar({
                 heroId    = heroId,
                 size      = S.heroAvatarSm,
-                quality   = db.quality + 1,
+                quality   = db.quality,
                 level     = heroState.level,
                 showLevel = true,
             }),
@@ -84,7 +84,7 @@ local function createHeroCard(heroId, heroState)
                     UI.Label {
                         text       = db.name,
                         fontSize   = Theme.fontSize.body,
-                        fontColor  = Theme.QualityColor(db.quality + 1),
+                        fontColor  = Theme.HeroQualityColor(db.quality),
                         fontWeight = "bold",
                     },
                     UI.Label {
@@ -577,7 +577,7 @@ local function buildDetailContent()
             children = {
                 Comp.HeroAvatar({
                     heroId = selectedHeroId_, size = S.heroAvatarMd,
-                    quality = db.quality + 1, level = hero.level, showLevel = true,
+                    quality = db.quality, level = hero.level, showLevel = true,
                 }),
                 UI.Panel {
                     flexDirection = "column", gap = 2,
@@ -585,7 +585,7 @@ local function buildDetailContent()
                         UI.Label {
                             text = db.name .. " Lv." .. hero.level,
                             fontSize = Theme.fontSize.subtitle,
-                            fontColor = Theme.QualityColor(db.quality + 1),
+                            fontColor = Theme.HeroQualityColor(db.quality),
                             fontWeight = "bold",
                         },
                         UI.Label {

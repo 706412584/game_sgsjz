@@ -108,11 +108,12 @@ end
 -- 3. HeroAvatar  武将头像
 ------------------------------------------------------------
 --- @param props { heroId, size?, quality?, level?, showLevel? }
+--- quality: 直接传 data_heroes 的 quality 值 (3=紫,4=橙 等), 内部自动偏移
 function M.HeroAvatar(props)
     props = props or {}
     local size    = props.size or S.heroAvatarMd
     local quality = props.quality or 1
-    local qColor  = Theme.QualityColor(quality)
+    local qColor  = Theme.HeroQualityColor(quality)
 
     local children = {}
 

@@ -35,8 +35,7 @@ end
 local function treasureQuality(inst)
     if not inst then return 1 end
     local tmpl = DT.Get(inst.templateId)
-    -- quality 5=橙(+1=6红色), 6=红(+1=7金色)
-    return tmpl and (tmpl.quality + 1) or 1
+    return tmpl and tmpl.quality or 1
 end
 
 ------------------------------------------------------------
@@ -45,7 +44,7 @@ end
 local function buildSlotCard(title, inst, slotInfo)
     local tmpl = inst and DT.Get(inst.templateId)
     local level = inst and (inst.level or 1) or 0
-    local qColor = inst and Theme.QualityColor(treasureQuality(inst)) or C.border
+    local qColor = inst and Theme.HeroQualityColor(treasureQuality(inst)) or C.border
 
     -- 属性行
     local attrChildren = {}
@@ -274,7 +273,7 @@ local function buildComposeSection(state)
     local publicIds = DT.GetAllPublicIds()
     for _, tid in ipairs(publicIds) do
         local tmpl = DT.Get(tid)
-        local qColor = Theme.QualityColor((tmpl.quality or 5) + 1)
+        local qColor = Theme.HeroQualityColor(tmpl.quality or 5)
         children[#children + 1] = UI.Panel {
             flexDirection = "row",
             alignItems = "center",
@@ -470,7 +469,7 @@ local function refreshHeroList(state)
                 Comp.HeroAvatar {
                     heroId = heroId,
                     size = S.heroAvatarSm,
-                    quality = hd and (hd.quality + 1) or 1,
+                    quality = hd and hd.quality or 1,
                 },
                 UI.Panel {
                     flexDirection = "column",

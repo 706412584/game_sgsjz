@@ -151,9 +151,16 @@ M.uiTheme = UI.Theme.ExtendTheme(UI.Theme.defaultTheme, {
 ------------------------------------------------------------
 
 --- 返回品质色 {r,g,b,a}
----@param quality integer 1-7
+---@param quality integer 1-7 (Theme 内部索引)
 function M.QualityColor(quality)
     return M.qualityColors[quality] or M.qualityColors[1]
+end
+
+--- 返回英雄品质色 (自动处理 data_heroes 品质偏移)
+--- data_heroes quality: 3=紫,4=橙,5=红,6=金 → theme index +1
+---@param heroQuality integer data_heroes 中的 quality 值
+function M.HeroQualityColor(heroQuality)
+    return M.qualityColors[(heroQuality or 0) + 1] or M.qualityColors[1]
 end
 
 --- 返回星级字符串 "★★★"

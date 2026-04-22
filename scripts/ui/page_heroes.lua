@@ -106,7 +106,7 @@ local function createHeroCard(heroId, heroState)
     if not db then return nil end
 
     local level    = heroState and heroState.level or 1
-    local qColor   = Theme.QualityColor(db.quality + 1)
+    local qColor   = Theme.HeroQualityColor(db.quality)
     local isSelected = (heroId == selectedHeroId_)
     local owned    = heroState ~= nil
 
@@ -133,7 +133,7 @@ local function createHeroCard(heroId, heroState)
             Comp.HeroAvatar({
                 heroId    = heroId,
                 size      = S.heroAvatarSm,
-                quality   = db.quality + 1,
+                quality   = db.quality,
                 level     = owned and level or nil,
                 showLevel = owned,
             }),
@@ -286,7 +286,7 @@ local function buildDetailPanel(heroId, heroState)
 
     local level   = heroState and heroState.level or 1
     local owned   = heroState ~= nil
-    local qColor  = Theme.QualityColor(db.quality + 1)
+    local qColor  = Theme.HeroQualityColor(db.quality)
     local fColor  = FACTION_COLORS[db.faction] or C.textDim
     local fName   = DH.FACTION_NAMES[db.faction] or "?"
     local qName   = DH.QUALITY_NAMES[db.quality] or "?"
@@ -300,7 +300,7 @@ local function buildDetailPanel(heroId, heroState)
                 Comp.HeroAvatar({
                     heroId  = heroId,
                     size    = S.heroAvatarLg,
-                    quality = db.quality + 1,
+                    quality = db.quality,
                 }),
                 UI.Panel {
                     flexDirection  = "column",

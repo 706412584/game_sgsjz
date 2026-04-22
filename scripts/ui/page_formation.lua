@@ -91,7 +91,7 @@ local function startHeroDrag(itemData, widget, heroId, x, y)
     if not dragCtx_ then return end
     dragCtx_:StartDrag(itemData, widget, "", x, y)
     local hd = DH.Get(heroId)
-    local qc = Theme.QualityColor(hd and (hd.quality + 1) or 1)
+    local qc = Theme.HeroQualityColor(hd and hd.quality or 0)
     dragCtx_.dragIcon_:SetStyle({
         backgroundImage = "Textures/heroes/hero_" .. heroId .. ".png",
         backgroundFit   = "cover",
@@ -152,10 +152,10 @@ local function renderSlotContent(panel, heroId, label)
     if heroId then
         local hd = DH.Get(heroId)
         local st = getHeroStats(heroId)
-        local qc = Theme.QualityColor(hd and (hd.quality + 1) or 1)
+        local qc = Theme.HeroQualityColor(hd and hd.quality or 0)
         panel:AddChild(Comp.HeroAvatar({
             heroId = heroId, size = 52,
-            quality = hd and (hd.quality + 1) or 1,
+            quality = hd and hd.quality or 1,
             level = st and st.level or 1, showLevel = true,
         }))
         panel:AddChild(UI.Label {
@@ -231,7 +231,7 @@ function refreshHeroList()  ---@diagnostic disable-line: lowercase-global
     for _, hero in ipairs(owned) do
         local inLineup = isInLineup(hero.id)
         local stats = getHeroStats(hero.id)
-        local qColor = Theme.QualityColor(hero.data.quality + 1)
+        local qColor = Theme.HeroQualityColor(hero.data.quality)
         local statsText = stats and ("统"..stats.tong.." 勇"..stats.yong.." 智"..stats.zhi) or ""
 
         local heroRow
@@ -286,7 +286,7 @@ function refreshHeroList()  ---@diagnostic disable-line: lowercase-global
                 maybeDragHero_ = nil
             end,
             children = {
-                Comp.HeroAvatar({ heroId = hero.id, size = 44, quality = hero.data.quality + 1 }),
+                Comp.HeroAvatar({ heroId = hero.id, size = 44, quality = hero.data.quality }),
                 UI.Panel {
                     flexGrow = 1, flexShrink = 1, flexDirection = "column", gap = 2,
                     children = {
