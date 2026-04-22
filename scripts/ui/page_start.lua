@@ -1,32 +1,20 @@
 -- ui/page_start.lua — 三国神将录 开始界面 (zIndex=900)
 local UI    = require("urhox-libs/UI")
+local Video = require("urhox-libs/Video")
 local Theme = require("ui.theme")
 local C     = Theme.colors
 
 local M = {}
 
 local startScreen_     = nil
+local videoBg_         = nil
 local serverSlot_      = nil
 local onEnterCallback_ = nil
 local enterBtn_        = nil
 local enterEnabled_    = false
 
--- 帧动画状态（双层 A/B 交叉淡入淡出 — 完整背景帧）
--- 序列: f1(无火) → f2(起火) → f3(旺盛) → f4(旺盛变体) → 之后 f3↔f4 循环
-local FIRE_FRAMES = {
-    "image/start_fire_f1_20260422064736.png",   -- 无火，火球远处
-    "image/start_fire_f2_20260422064619.png",   -- 小火苗，火球逼近
-    "image/start_fire_f3_20260422064621.png",   -- 旺盛，火球落地
-    "image/start_fire_f4_20260422064622.png",   -- 旺盛变体，火球炸开
-}
-local FRAME_INTERVAL = 1.2      -- 每帧停留秒数
-local FRAME_FADE     = 0.8      -- 交叉淡入淡出时长
-local bgLayerA_      = nil      -- 当前显示层
-local bgLayerB_      = nil      -- 淡入过渡层
-local frameTimer_    = 0
-local frameIndex_    = 1        -- 当前帧 (1-4)
-local introPlayed_   = false    -- 开场 1→2→3→4 是否播完
-local frameFading_   = false    -- 是否正在淡入淡出
+-- 背景视频路径
+local BG_VIDEO = "video/cgt-20260422145730-c7dvw_video.mp4"
 
 --- 创建开始界面覆盖层
 ---@param onEnter fun()
@@ -34,12 +22,7 @@ local frameFading_   = false    -- 是否正在淡入淡出
 function M.Create(onEnter)
     onEnterCallback_ = onEnter
     enterEnabled_ = false
-    frameTimer_   = 0
-    frameIndex_   = 1
-    introPlayed_  = false
-    frameFading_  = false
-    bgLayerA_     = nil
-    bgLayerB_     = nil
+    videoBg_      = nil
 
     startScreen_ = UI.Panel {
         id            = "start_screen",
@@ -54,29 +37,35 @@ function M.Create(onEnter)
         backgroundColor = C.bg,
     }
 
-    -- 1) 火把帧动画背景（双层 A/B 交叉淡入淡出）
-    bgLayerA_ = UI.Panel {
-        backgroundImage = FIRE_FRAMES[1],
+    -- 1) 静态背景图（视频加载前显示）
+    startScreen_:AddChild(UI.Panel {
+        backgroundImage = "image/start_fire_f4_20260422063329.png",
         backgroundFit   = "cover",
         width           = "100%",
         height          = "100%",
         position        = "absolute",
         top = 0, left = 0,
-        opacity         = 1.0,
-    }
-    bgLayerB_ = UI.Panel {
-        backgroundImage = FIRE_FRAMES[1],
-        backgroundFit   = "cover",
-        width           = "100%",
-        height          = "100%",
-        position        = "absolute",
-        top = 0, left = 0,
-        opacity         = 0,
-    }
-    startScreen_:AddChild(bgLayerA_)
-    startScreen_:AddChild(bgLayerB_)
+    })
 
-    -- 2) 底部火光渐变（暖橙色，模拟篝火映照）
+    -- 2) 循环视频背景
+    videoBg_ = Video.VideoPlayer {
+        src            = BG_VIDEO,
+        width          = "100%",
+        height         = "100%",
+        position       = "absolute",
+        top = 0, left = 0,
+        textureWidth   = 1280,
+        textureHeight  = 720,
+        autoPlay       = true,
+        loop           = true,
+        muted          = true,
+        volume         = 0,
+        objectFit      = "cover",
+        backgroundColor = { 0, 0, 0, 0 },
+    }
+    startScreen_:AddChild(videoBg_)
+
+    -- 3) 底部火光渐变（暖橙色，模拟篝火映照）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
         height   = "35%",
@@ -92,7 +81,7 @@ function M.Create(onEnter)
         },
     })
 
-    -- 3) 底部深色遮罩（让按钮文字可读）
+    -- 4) 底部深色遮罩（让按钮文字可读）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
         height   = "25%",
@@ -201,59 +190,10 @@ function M.Create(onEnter)
     return startScreen_
 end
 
---- 每帧更新火把帧动画
---- 序列: f1→f2→f3→f4（开场），之后 f3↔f4 循环
+--- 每帧更新（视频自动循环，无需手动驱动）
 ---@param dt number
 function M.Update(dt)
-    if not startScreen_ or not M.IsVisible() then return end
-    if not bgLayerA_ or not bgLayerB_ then return end
-    if frameFading_ then return end
-
-    frameTimer_ = frameTimer_ + dt
-    if frameTimer_ < FRAME_INTERVAL then return end
-    frameTimer_ = 0
-
-    -- 计算下一帧
-    local nextIdx
-    if not introPlayed_ then
-        -- 开场阶段: 1→2→3→4 顺序播放
-        nextIdx = frameIndex_ + 1
-        if nextIdx > 4 then
-            -- 开场播完，进入循环
-            introPlayed_ = true
-            nextIdx = 3   -- 回到 f3 开始循环
-        end
-    else
-        -- 循环阶段: f3↔f4
-        nextIdx = (frameIndex_ == 3) and 4 or 3
-    end
-
-    local nextImage = FIRE_FRAMES[nextIdx]
-
-    -- B 层设置下一帧图片并淡入
-    bgLayerB_:SetStyle({ backgroundImage = nextImage })
-    frameFading_ = true
-    bgLayerB_:Animate({
-        keyframes = {
-            [0] = { opacity = 0 },
-            [1] = { opacity = 1.0 },
-        },
-        duration = FRAME_FADE,
-        easing   = "easeInOut",
-        fillMode = "forwards",
-        onComplete = function()
-            -- 淡入完成：A 层换成当前帧图（瞬间），B 层归零
-            if bgLayerA_ then
-                bgLayerA_:SetStyle({ backgroundImage = nextImage })
-            end
-            if bgLayerB_ then
-                bgLayerB_.props.opacity = 0
-                bgLayerB_.renderProps_.opacity = nil
-            end
-            frameIndex_ = nextIdx
-            frameFading_ = false
-        end,
-    })
+    -- 视频由引擎自动循环播放，无需逻辑
 end
 
 -- 公开 API
@@ -261,6 +201,8 @@ function M.Show()
     if startScreen_ then
         startScreen_:SetVisible(true)
         YGNodeStyleSetDisplay(startScreen_.node, YGDisplayFlex)
+        -- 恢复视频播放
+        if videoBg_ then videoBg_:Play() end
     end
 end
 
@@ -268,6 +210,8 @@ function M.Hide()
     if startScreen_ then
         startScreen_:SetVisible(false)
         YGNodeStyleSetDisplay(startScreen_.node, YGDisplayNone)
+        -- 暂停视频节省性能
+        if videoBg_ then videoBg_:Pause() end
     end
 end
 
