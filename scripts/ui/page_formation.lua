@@ -27,25 +27,9 @@ local formationBtnLabel_, formationDescLabel_, formationListPanel_
 -- 拖放状态
 local dragCtx_
 local dragStartX_, dragStartY_ = 0, 0
-local maybeDragHero_ = nil  -- { heroId, widget }
+local maybeDragHero_ = nil  -- { heroId = string }
 local cachedCtxLayout_ = nil  -- 拖拽期间缓存 context 绝对坐标(避免每帧重算)
-local dragUpdateBound_ = false  -- Update 事件是否已绑定
 local dragEndFrame_ = -1        -- 拖拽结束帧号(防止同帧 onClick 双重触发)
-
---- 获取当前指针位置和按下状态(兼容鼠标+触摸)
----@return number x, number y, boolean isDown
-local function getPointerState()
-    -- 优先检查触摸(移动端)
-    if input:GetNumTouches() > 0 then
-        local touch = input:GetTouch(0)
-        return touch.position.x, touch.position.y, true
-    end
-    -- 无触摸时检查鼠标(PC端，或触摸已抬起)
-    local mx = input.mousePosition.x
-    local my = input.mousePosition.y
-    local isDown = input:GetMouseButtonDown(MOUSEB_LEFT)
-    return mx, my, isDown
-end
 
 -- 英雄列表缓存: heroRows_[heroId] = { row=Panel, inLineup=bool }
 local heroRows_ = {}
@@ -123,12 +107,19 @@ local function fastUpdateDragPos(x, y)
     YGNodeStyleSetPosition(iconNode, YGEdgeTop,  (y - cachedCtxLayout_.y) - DRAG_ICON_HALF)
 end
 
---- 停止拖拽追踪(取消 Update 事件订阅)
+--- 将 widget 局部坐标转换为屏幕坐标(base pixels)
+---@param widget table UI widget
+---@param localX number widget 局部 x
+---@param localY number widget 局部 y
+---@return number screenX, number screenY
+local function localToScreen(widget, localX, localY)
+    local l = widget:GetAbsoluteLayout()
+    return l.x + localX, l.y + localY
+end
+
+--- 停止拖拽状态(清理)
 local function stopDragTracking()
-    if dragUpdateBound_ then
-        UnsubscribeFromEvent("Update")
-        dragUpdateBound_ = false
-    end
+    print(string.format("[FMT] stopDragTracking frame=%d", time.frameNumber))
     maybeDragHero_ = nil
     -- 恢复英雄列表指针事件(拖拽期间被禁用以跳过 hit testing)
     if heroListScroll_ and heroListScroll_.props then
@@ -139,46 +130,54 @@ local function stopDragTracking()
     dragEndFrame_ = time.frameNumber
 end
 
---- 启动每帧拖拽追踪: 订阅 Update 事件, 轮询指针位置(兼容鼠标+触摸)
-local function startDragTracking()
-    if dragUpdateBound_ then return end
-    dragUpdateBound_ = true
-    SubscribeToEvent("Update", function(eventType, eventData)
-        local mx, my, isDown = getPointerState()
+--- 指针移动处理: 拖拽阈值检测 + 拖拽位置更新
+--- 由 heroRow/slot 的 onPointerMove 调用
+---@param widget table 发出事件的 widget
+---@param event table PointerEvent (局部坐标)
+local function handleDragPointerMove(widget, event)
+    local sx, sy = localToScreen(widget, event.x, event.y)
 
-        -- 阶段1: 未正式拖拽,检测拖动阈值
-        if maybeDragHero_ and dragCtx_ and not dragCtx_:IsDragging() then
-            -- 指针已松开但未达到拖拽阈值 → 取消预拖拽
-            if not isDown then
-                stopDragTracking()
-                return
-            end
-            local dx = mx - dragStartX_
-            local dy = my - dragStartY_
-            if dx * dx + dy * dy > 16 then -- 4px 阈值
-                local cache = heroRows_[maybeDragHero_.heroId]
-                local widget = cache and cache.row
-                startHeroDrag(
-                    { heroId = maybeDragHero_.heroId, _srcType = "list" },
-                    widget, maybeDragHero_.heroId, mx, my)
-                maybeDragHero_ = nil
-            end
+    -- 阶段1: 预拖拽, 检测拖动阈值
+    if maybeDragHero_ and dragCtx_ and not dragCtx_:IsDragging() then
+        local dx = sx - dragStartX_
+        local dy = sy - dragStartY_
+        if dx * dx + dy * dy > 16 then -- 4px 阈值
+            local cache = heroRows_[maybeDragHero_.heroId]
+            local srcWidget = cache and cache.row
+            startHeroDrag(
+                { heroId = maybeDragHero_.heroId, _srcType = "list" },
+                srcWidget, maybeDragHero_.heroId, sx, sy)
+            maybeDragHero_ = nil
         end
+        return
+    end
 
-        -- 阶段2: 正在拖拽,更新位置
-        if dragCtx_ and dragCtx_:IsDragging() then
-            fastUpdateDragPos(mx, my)
-            -- 检测指针释放
-            if not isDown then
-                local target = dragCtx_:FindDropTargetAt(mx, my)
-                dragCtx_:EndDrag(target)
-                stopDragTracking()
-            end
-        elseif not maybeDragHero_ then
-            -- 既不在预拖拽也不在拖拽中,停止追踪
-            stopDragTracking()
-        end
-    end)
+    -- 阶段2: 正在拖拽, 更新位置
+    if dragCtx_ and dragCtx_:IsDragging() then
+        fastUpdateDragPos(sx, sy)
+    end
+end
+
+--- 指针释放处理: 结束拖拽 + 放置到目标
+--- 由 heroRow/slot 的 onPointerUp 调用
+---@param widget table 发出事件的 widget
+---@param event table PointerEvent (局部坐标)
+local function handleDragPointerUp(widget, event)
+    local sx, sy = localToScreen(widget, event.x, event.y)
+
+    -- 正在拖拽: 执行放置
+    if dragCtx_ and dragCtx_:IsDragging() then
+        local target = dragCtx_:FindDropTargetAt(sx, sy)
+        dragCtx_:EndDrag(target)
+        stopDragTracking()
+        return
+    end
+
+    -- 预拖拽但未达阈值(tap): 取消预拖拽即可, onClick 会自然触发
+    if maybeDragHero_ then
+        print(string.format("[FMT] preDrag released (pointerUp) frame=%d", time.frameNumber))
+        maybeDragHero_ = nil
+    end
 end
 
 --- 启动拖拽并设置武将头像为拖拽图标
@@ -301,7 +300,8 @@ end
 -- 槽位点击: 直接下阵
 ------------------------------------------------------------
 local function onSlotClick(row, idx)
-    if time.frameNumber == dragEndFrame_ then return end
+    print(string.format("[FMT] onSlotClick %s[%d] frame=%d dragEndFrame=%d", row, idx, time.frameNumber, dragEndFrame_))
+    if time.frameNumber == dragEndFrame_ then print("[FMT] slotClick SKIP (dragEnd same frame)"); return end
     local arr = row == "front" and editFront_ or editBack_
     if arr[idx] then
         arr[idx] = nil
@@ -334,7 +334,8 @@ local function createHeroRow(heroId)
         backgroundColor = C.panel,
         borderRadius = 6, borderColor = C.border, borderWidth = 1,
         onClick = function()
-            if time.frameNumber == dragEndFrame_ then return end
+            print(string.format("[FMT] onClick heroRow %s frame=%d dragEndFrame=%d", heroId, time.frameNumber, dragEndFrame_))
+            if time.frameNumber == dragEndFrame_ then print("[FMT] onClick SKIP (dragEnd same frame)"); return end
             if isInLineup(heroId) then
                 Modal.Alert("提示", hero.data.name .. " 已在阵容中")
                 return
@@ -345,15 +346,24 @@ local function createHeroRow(heroId)
             elseif #editBack_ < 3 then
                 editBack_[#editBack_ + 1] = heroId; placed = true
             end
-            if placed then refreshSlots()
+            if placed then print("[FMT] placed " .. heroId); refreshSlots()
             else Modal.Alert("提示", "阵容已满(前排2+后排3)") end
         end,
-        onPointerDown = function(event)
+        onPointerDown = function(event, self)
+            local sx, sy = localToScreen(self, event.x, event.y)
+            print(string.format("[FMT] onPointerDown heroRow %s sx=%.0f sy=%.0f", heroId, sx, sy))
             if isInLineup(heroId) then return end
-            dragStartX_ = event.x
-            dragStartY_ = event.y
+            dragStartX_ = sx
+            dragStartY_ = sy
             maybeDragHero_ = { heroId = heroId }
-            startDragTracking()  -- 启动 Update 轮询,消除间隙死区
+        end,
+        onPointerMove = function(event, self)
+            if maybeDragHero_ or (dragCtx_ and dragCtx_:IsDragging()) then
+                handleDragPointerMove(self, event)
+            end
+        end,
+        onPointerUp = function(event, self)
+            handleDragPointerUp(self, event)
         end,
         children = {
             Comp.HeroAvatar({ heroId = heroId, size = 44, quality = hero.data.quality }),
@@ -530,14 +540,23 @@ function M.Create(gameState, callbacks)
         slot = UI.Panel {
             width = 72, alignItems = "center", gap = 2, paddingVertical = 4,
             onClick = function() onSlotClick(row, i) end,
-            onPointerDown = function(event)
+            onPointerDown = function(event, self)
+                local sx, sy = localToScreen(self, event.x, event.y)
+                print(string.format("[FMT] onPointerDown slot %s[%d] sx=%.0f sy=%.0f hero=%s", row, i, sx, sy, tostring((row == "front" and editFront_ or editBack_)[i])))
                 local arr = row == "front" and editFront_ or editBack_
                 if arr[i] and dragCtx_ then
                     startHeroDrag(
                         { heroId = arr[i], _srcType = "slot", _slotInfo = { row = row, idx = i } },
-                        slot, arr[i], event.x, event.y)
-                    startDragTracking()  -- 启动 Update 轮询
+                        self, arr[i], sx, sy)
                 end
+            end,
+            onPointerMove = function(event, self)
+                if dragCtx_ and dragCtx_:IsDragging() then
+                    handleDragPointerMove(self, event)
+                end
+            end,
+            onPointerUp = function(event, self)
+                handleDragPointerUp(self, event)
             end,
             onPointerEnter = function(event, self)
                 if dragCtx_ and dragCtx_:IsDragging() then
