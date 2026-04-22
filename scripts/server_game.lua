@@ -10,6 +10,7 @@ local State   = require("data.data_state")
 local Battle  = require("data.battle_engine")
 local Shop    = require("data.data_shop")
 local DE      = require("data.data_equip")
+local DF      = require("data.data_formation")
 local Shared  = require("network.shared")
 local EVENTS  = Shared.EVENTS
 
@@ -156,6 +157,7 @@ function M.LoadPlayer(userId, serverId, callback)
                 state.lineup = state.lineup or {
                     formation = "feng_shi", front = {}, back = {}
                 }
+                state.lineup.formation = state.lineup.formation or "feng_shi"
                 for _, h in pairs(state.heroes or {}) do
                     if h.star == nil then h.star = 1 end
                     if h.fragments == nil then h.fragments = 0 end
@@ -528,7 +530,16 @@ ACTION_HANDLERS["set_lineup"] = function(userId, params)
         allIds[hid] = true
     end
 
-    state.lineup.formation = params.formation or state.lineup.formation
+    -- 阵法解锁校验
+    local newFormation = params.formation or state.lineup.formation
+    if newFormation and newFormation ~= state.lineup.formation then
+        if not DF.IsUnlocked(newFormation, state) then
+            sendEvt(userId, "error", { msg = "阵法尚未解锁" })
+            return
+        end
+    end
+
+    state.lineup.formation = newFormation
     state.lineup.front = front
     state.lineup.back  = back
 

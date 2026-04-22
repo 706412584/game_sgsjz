@@ -524,6 +524,8 @@ function Start()
             ShopPage.Refresh(gs())
         elseif currentPage_ == "equip" then
             EquipPage.Refresh(gs())
+        elseif currentPage_ == "formation" then
+            FormationPage.Refresh(gs())
         end
     end
 

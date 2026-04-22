@@ -6,6 +6,7 @@
 ------------------------------------------------------------
 local DH = require("data.data_heroes")
 local DM = require("data.data_maps")
+local DF = require("data.data_formation")
 
 local M = {}
 
@@ -434,16 +435,22 @@ local function calcBasicDamage(attacker, defender)
 
     local damage = baseAtk * (1 - defRate)
 
-    -- 暴击判定
-    local critRate = M.BASE_CRIT_RATE
+    -- 暴击判定(含阵法加成)
+    local critRate = M.BASE_CRIT_RATE + (attacker.formationCrit or 0)
     if attacker.yong > 100 then critRate = critRate + (attacker.yong - 100) * 0.001 end
     local isCrit = math.random() < critRate
     if isCrit then damage = damage * M.CRIT_MULTIPLIER end
 
+    -- 闪避判定(阵法闪避)
+    local dodgeRate = defender.formationDodge or 0
+    if dodgeRate > 0 and math.random() < dodgeRate then
+        return 0, false, true  -- damage=0, isCrit=false, isDodge=true
+    end
+
     -- 随机波动 ±10%
     damage = damage * (0.9 + math.random() * 0.2)
 
-    return math.floor(math.max(1, damage)), isCrit
+    return math.floor(math.max(1, damage)), isCrit, false
 end
 
 --- 计算战法伤害
@@ -469,14 +476,20 @@ local function calcSkillDamage(attacker, defender, multiplier)
 
     local damage = baseAtk * multiplier * (1 - defRate)
 
-    -- 战法暴击率较低但伤害更高
-    local critRate = M.BASE_CRIT_RATE * 0.8
+    -- 战法暴击率较低但伤害更高(含阵法加成)
+    local critRate = M.BASE_CRIT_RATE * 0.8 + (attacker.formationCrit or 0)
     if attacker.yong > 120 then critRate = critRate + (attacker.yong - 120) * 0.0012 end
     local isCrit = math.random() < critRate
     if isCrit then damage = damage * (M.CRIT_MULTIPLIER + 0.2) end
 
+    -- 闪避判定(阵法闪避)
+    local dodgeRate = defender.formationDodge or 0
+    if dodgeRate > 0 and math.random() < dodgeRate then
+        return 0, false, true
+    end
+
     damage = damage * (0.9 + math.random() * 0.2)
-    return math.floor(math.max(1, damage)), isCrit
+    return math.floor(math.max(1, damage)), isCrit, false
 end
 
 --- 计算法攻伤害
@@ -920,22 +933,30 @@ local function executeAction(actor, allUnits)
                     if extras.ignoreDefense then
                         t.yong = math.floor(t.yong * (1 - extras.ignoreDefense))
                     end
-                    local dmg, crit = calcSkillDamage(actor, t, mult)
+                    local dmg, crit, dodged = calcSkillDamage(actor, t, mult)
                     t.yong = origYong  -- 恢复
-                    -- 暴击加成
-                    if extras.critBonus and not crit then
-                        if math.random() < extras.critBonus then
-                            dmg = math.floor(dmg * M.CRIT_MULTIPLIER)
-                            crit = true
+                    if dodged then
+                        action.targets[#action.targets + 1] = t.name
+                        action.damages[#action.damages + 1] = 0
+                        action.isCrit[#action.isCrit + 1] = false
+                        action.killed[#action.killed + 1] = false
+                        action.extras[#action.extras + 1] = { type = "dodge", target = t.name }
+                    else
+                        -- 暴击加成
+                        if extras.critBonus and not crit then
+                            if math.random() < extras.critBonus then
+                                dmg = math.floor(dmg * M.CRIT_MULTIPLIER)
+                                crit = true
+                            end
                         end
+                        applyDamage(actor, t, dmg)
+                        action.targets[#action.targets + 1] = t.name
+                        action.damages[#action.damages + 1] = dmg
+                        action.isCrit[#action.isCrit + 1] = crit
+                        action.killed[#action.killed + 1] = not t.alive
+                        postDamageHit(t, dmg, true)
+                        if not t.alive then pursuitKillTarget = t end
                     end
-                    applyDamage(actor, t, dmg)
-                    action.targets[#action.targets + 1] = t.name
-                    action.damages[#action.damages + 1] = dmg
-                    action.isCrit[#action.isCrit + 1] = crit
-                    action.killed[#action.killed + 1] = not t.alive
-                    postDamageHit(t, dmg, true)
-                    if not t.alive then pursuitKillTarget = t end
 
                 elseif eff.type == EFFECT.MAGIC then
                     local mult = eff.multiplier or 1.5
@@ -1068,23 +1089,34 @@ local function executeAction(actor, allUnits)
         end
 
         for _, t in ipairs(targets) do
-            local dmg, crit = calcBasicDamage(actor, t)
-            -- 暴击加成(被动)
-            if extras.critBonus and not crit then
-                if math.random() < extras.critBonus then
-                    dmg = math.floor(dmg * M.CRIT_MULTIPLIER)
-                    crit = true
+            local dmg, crit, dodged = calcBasicDamage(actor, t)
+            if dodged then
+                -- 闪避: 不造成伤害
+                action.targets[#action.targets + 1] = t.name
+                action.damages[#action.damages + 1] = 0
+                action.isCrit[#action.isCrit + 1] = false
+                action.killed[#action.killed + 1] = false
+                action.extras[#action.extras + 1] = { type = "dodge", target = t.name }
+                -- 闪避仍回士气
+                actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_HIT)
+            else
+                -- 暴击加成(被动)
+                if extras.critBonus and not crit then
+                    if math.random() < extras.critBonus then
+                        dmg = math.floor(dmg * M.CRIT_MULTIPLIER)
+                        crit = true
+                    end
                 end
-            end
-            applyDamage(actor, t, dmg)
-            action.targets[#action.targets + 1] = t.name
-            action.damages[#action.damages + 1] = dmg
-            action.isCrit[#action.isCrit + 1] = crit
-            action.killed[#action.killed + 1] = not t.alive
+                applyDamage(actor, t, dmg)
+                action.targets[#action.targets + 1] = t.name
+                action.damages[#action.damages + 1] = dmg
+                action.isCrit[#action.isCrit + 1] = crit
+                action.killed[#action.killed + 1] = not t.alive
 
-            -- 士气变化
-            actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_HIT)
-            postDamageHit(t, dmg, false)
+                -- 士气变化
+                actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_HIT)
+                postDamageHit(t, dmg, false)
+            end
         end
     end
 
@@ -1112,6 +1144,41 @@ function M.BuildAllyTeam(gameState)
     for _, hid in ipairs(lineup.back or {}) do
         local heroState = gameState.heroes[hid]
         units[#units + 1] = M.CreateHeroUnit(hid, heroState, "ally", "back")
+    end
+
+    -- 应用阵法加成
+    local formationId = lineup.formation or DF.GetDefault()
+    local buffs = DF.GetBuffs(formationId)
+    for _, u in ipairs(units) do
+        -- 百分比三围加成
+        if buffs.tong_pct then u.tong = math.floor(u.tong * (1 + buffs.tong_pct)) end
+        if buffs.yong_pct then u.yong = math.floor(u.yong * (1 + buffs.yong_pct)) end
+        if buffs.zhi_pct  then u.zhi  = math.floor(u.zhi  * (1 + buffs.zhi_pct))  end
+        -- 兵力加成
+        if buffs.hp_pct then
+            local bonus = math.floor(u.maxHp * buffs.hp_pct)
+            u.maxHp = u.maxHp + bonus
+            u.hp    = u.hp + bonus
+        end
+        -- 攻击加成(基于勇武)
+        if buffs.atk_pct then u.yong = math.floor(u.yong * (1 + buffs.atk_pct)) end
+        -- 防御加成(基于统率)
+        if buffs.def_pct then u.tong = math.floor(u.tong * (1 + buffs.def_pct)) end
+        -- 前排专属防御
+        if buffs.front_def_pct and u.row == "front" then
+            u.tong = math.floor(u.tong * (1 + buffs.front_def_pct))
+        end
+        -- 后排专属攻击
+        if buffs.back_atk_pct and u.row == "back" then
+            u.yong = math.floor(u.yong * (1 + buffs.back_atk_pct))
+        end
+        -- 初始士气
+        if buffs.morale_init then
+            u.morale = math.min(M.MORALE_MAX, u.morale + buffs.morale_init)
+        end
+        -- 暴击/闪避存储到单元上供战斗时使用
+        u.formationCrit  = buffs.crit or 0
+        u.formationDodge = buffs.dodge or 0
     end
 
     return units

@@ -8,6 +8,7 @@ local Theme = require("ui.theme")
 local Comp  = require("ui.components")
 local Modal = require("ui.modal_manager")
 local DH    = require("data.data_heroes")
+local DF    = require("data.data_formation")
 local C     = Theme.colors
 local S     = Theme.sizes
 
@@ -21,6 +22,7 @@ local callbacks_
 -- 当前编辑中的阵容(临时副本)
 local editFront_ = {}   -- { heroId1, heroId2 }
 local editBack_  = {}   -- { heroId1, heroId2, heroId3 }
+local editFormation_ = "feng_shi"  -- 当前选中阵法ID
 
 -- 选择中的槽位 (nil=未选择)
 local selectedSlot_ = nil  -- { row="front"|"back", idx=1..N }
@@ -29,6 +31,9 @@ local selectedSlot_ = nil  -- { row="front"|"back", idx=1..N }
 local slotPanels_    = {}   -- { front={}, back={} }
 local powerLabel_
 local heroListContainer_
+local formationBtnLabel_     -- 阵法按钮上的名称
+local formationDescLabel_    -- 阵法效果描述
+local formationListPanel_    -- 阵法选择下拉面板
 
 ------------------------------------------------------------
 -- 辅助
@@ -412,9 +417,133 @@ function refreshHeroList()
 end
 
 ------------------------------------------------------------
+-- 阵法选择器
+------------------------------------------------------------
+
+--- 刷新阵法按钮显示
+local function refreshFormationDisplay()
+    local f = DF.Get(editFormation_)
+    if formationBtnLabel_ then
+        formationBtnLabel_.text = f and f.name or "锋矢阵"
+    end
+    if formationDescLabel_ then
+        formationDescLabel_.text = f and f.detail or ""
+    end
+end
+
+--- 构建阵法选择列表内容
+local function buildFormationList()
+    if not formationListPanel_ then return end
+    formationListPanel_:ClearChildren()
+
+    local formations = DF.GetAllWithStatus(gameState_)
+    for _, fi in ipairs(formations) do
+        local isSelected = fi.id == editFormation_
+        local isLocked   = not fi.unlocked
+
+        -- 解锁条件文字
+        local unlockText = ""
+        if fi.unlock.type == "map" then
+            unlockText = "通关" .. fi.unlock.value .. "张地图解锁"
+        end
+
+        -- buff 文字列表
+        local buffTexts = {}
+        if fi.buffs then
+            for attr, val in pairs(fi.buffs) do
+                buffTexts[#buffTexts + 1] = DF.GetBuffName(attr) .. DF.FormatBuff(attr, val)
+            end
+        end
+        local buffStr = table.concat(buffTexts, "  ")
+
+        local rowBg
+        if isSelected then
+            rowBg = { 80, 60, 30, 220 }
+        elseif isLocked then
+            rowBg = { 30, 30, 35, 200 }
+        else
+            rowBg = { 40, 45, 55, 200 }
+        end
+
+        local row = UI.Panel {
+            width           = "100%",
+            flexDirection   = "column",
+            padding         = 6,
+            gap             = 2,
+            backgroundColor = rowBg,
+            borderRadius    = 6,
+            borderColor     = isSelected and C.gold or C.border,
+            borderWidth     = isSelected and 2 or 1,
+            opacity         = isLocked and 0.5 or 1.0,
+            onClick         = function()
+                if isLocked then
+                    Modal.Alert("未解锁", fi.name .. "需要" .. unlockText)
+                    return
+                end
+                editFormation_ = fi.id
+                refreshFormationDisplay()
+                -- 关闭列表
+                formationListPanel_:SetVisible(false)
+                YGNodeStyleSetDisplay(formationListPanel_.node, YGDisplayNone)
+            end,
+            children = {
+                -- 第一行: 阵名 + 状态
+                UI.Panel {
+                    width         = "100%",
+                    flexDirection = "row",
+                    alignItems    = "center",
+                    gap           = 6,
+                    children = {
+                        UI.Label {
+                            text       = fi.name,
+                            fontSize   = 12,
+                            fontColor  = isSelected and C.gold or (isLocked and C.textDim or C.text),
+                            fontWeight = "bold",
+                        },
+                        isSelected and UI.Label {
+                            text      = "[当前]",
+                            fontSize  = 9,
+                            fontColor = C.gold,
+                        } or nil,
+                        isLocked and UI.Label {
+                            text      = "[" .. unlockText .. "]",
+                            fontSize  = 9,
+                            fontColor = { 180, 80, 80, 255 },
+                        } or nil,
+                    },
+                },
+                -- 第二行: 效果描述
+                UI.Label {
+                    text      = buffStr,
+                    fontSize  = 9,
+                    fontColor = isLocked and C.textDim or C.jade,
+                    maxLines  = 2,
+                },
+            },
+        }
+        formationListPanel_:AddChild(row)
+    end
+end
+
+--- 切换阵法选择列表的显示/隐藏
+local function toggleFormationList()
+    if not formationListPanel_ then return end
+    local isVisible = formationListPanel_:IsVisible()
+    if isVisible then
+        formationListPanel_:SetVisible(false)
+        YGNodeStyleSetDisplay(formationListPanel_.node, YGDisplayNone)
+    else
+        buildFormationList()
+        formationListPanel_:SetVisible(true)
+        YGNodeStyleSetDisplay(formationListPanel_.node, YGDisplayFlex)
+    end
+end
+
+------------------------------------------------------------
 -- 保存阵容到 gameState
 ------------------------------------------------------------
 local function saveLineup()
+    gameState_.lineup.formation = editFormation_
     gameState_.lineup.front = {}
     gameState_.lineup.back  = {}
     for _, h in ipairs(editFront_) do
@@ -442,6 +571,7 @@ function M.Create(gameState, callbacks)
     -- 初始化编辑副本
     editFront_ = {}
     editBack_  = {}
+    editFormation_ = gameState.lineup.formation or DF.GetDefault()
     for _, h in ipairs(gameState.lineup.front or {}) do
         editFront_[#editFront_ + 1] = h
     end
@@ -484,6 +614,82 @@ function M.Create(gameState, callbacks)
         backSlots[i] = slot
     end
 
+    -- 阵法选择按钮
+    local curFormation = DF.Get(editFormation_)
+    formationBtnLabel_ = UI.Label {
+        text       = curFormation and curFormation.name or "锋矢阵",
+        fontSize   = 12,
+        fontColor  = C.gold,
+        fontWeight = "bold",
+    }
+    formationDescLabel_ = UI.Label {
+        text      = curFormation and curFormation.detail or "",
+        fontSize  = 9,
+        fontColor = C.jade,
+        maxLines  = 1,
+    }
+
+    -- 阵法选择列表(默认隐藏)
+    formationListPanel_ = UI.ScrollView {
+        width           = "100%",
+        maxHeight       = 180,
+        scrollY         = true,
+        gap             = 4,
+        padding         = 4,
+        backgroundColor = { 25, 30, 40, 240 },
+        borderRadius    = 6,
+        borderColor     = C.gold,
+        borderWidth     = 1,
+        display         = "none",
+    }
+    formationListPanel_:SetVisible(false)
+
+    local formationSelector = UI.Panel {
+        width         = "100%",
+        gap           = 4,
+        children = {
+            -- 阵法按钮行
+            UI.Panel {
+                width           = "100%",
+                flexDirection   = "row",
+                alignItems      = "center",
+                justifyContent  = "space-between",
+                paddingHorizontal = 6,
+                paddingVertical   = 4,
+                backgroundColor = { 50, 45, 30, 200 },
+                borderRadius    = 6,
+                borderColor     = C.gold,
+                borderWidth     = 1,
+                onClick         = toggleFormationList,
+                children = {
+                    UI.Panel {
+                        flexDirection = "row",
+                        alignItems    = "center",
+                        gap           = 6,
+                        children = {
+                            UI.Label {
+                                text      = "阵法:",
+                                fontSize  = 11,
+                                fontColor = C.textDim,
+                            },
+                            formationBtnLabel_,
+                        },
+                    },
+                    UI.Panel {
+                        flexDirection = "column",
+                        alignItems    = "flex-end",
+                        flexShrink    = 1,
+                        children = {
+                            formationDescLabel_,
+                        },
+                    },
+                },
+            },
+            -- 展开的阵法列表
+            formationListPanel_,
+        },
+    }
+
     -- 阵容区域
     local formationPanel = UI.Panel {
         width         = "100%",
@@ -510,6 +716,9 @@ function M.Create(gameState, callbacks)
                     powerLabel_,
                 },
             },
+
+            -- 阵法选择器
+            formationSelector,
 
             Comp.SanDivider({ spacing = 4 }),
 
@@ -559,7 +768,9 @@ function M.Create(gameState, callbacks)
                 return
             end
             saveLineup()
-            Modal.Alert("保存成功", "阵容已更新！共" .. total .. "名武将")
+            local fName = DF.Get(editFormation_)
+            fName = fName and fName.name or editFormation_
+            Modal.Alert("保存成功", "阵容已更新！共" .. total .. "名武将\n阵法: " .. fName)
             if callbacks_.onSave then
                 callbacks_.onSave()
             end
@@ -676,6 +887,28 @@ function M.Create(gameState, callbacks)
     refreshSlots()
 
     return pagePanel_
+end
+
+--- 刷新页面(状态同步后调用)
+---@param gameState table
+function M.Refresh(gameState)
+    if not pagePanel_ then return end
+    gameState_ = gameState
+
+    -- 同步编辑副本
+    editFront_ = {}
+    editBack_  = {}
+    editFormation_ = gameState.lineup.formation or DF.GetDefault()
+    for _, h in ipairs(gameState.lineup.front or {}) do
+        editFront_[#editFront_ + 1] = h
+    end
+    for _, h in ipairs(gameState.lineup.back or {}) do
+        editBack_[#editBack_ + 1] = h
+    end
+
+    selectedSlot_ = nil
+    refreshFormationDisplay()
+    refreshSlots()
 end
 
 return M
