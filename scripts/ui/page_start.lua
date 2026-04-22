@@ -8,13 +8,23 @@ local M = {}
 
 local startScreen_     = nil
 local videoBg_         = nil
+local videoWrap_       = nil   -- 视频包裹层，用于 opacity 淡入淡出
 local serverSlot_      = nil
 local onEnterCallback_ = nil
 local enterBtn_        = nil
 local enterEnabled_    = false
 
--- 背景视频路径
-local BG_VIDEO = "video/cgt-20260422195103-w2kss_video.mp4"
+-- 背景视频路径（使用第一个视频）
+local BG_VIDEO = "video/cgt-20260422145730-c7dvw_video.mp4"
+
+-- 无缝循环参数
+local LOOP_END   = 4.0   -- 循环终点（秒）
+local FADE_DUR   = 0.35  -- 淡出/淡入时长（秒）
+local FADE_START = LOOP_END - FADE_DUR  -- 开始淡出的时间点
+
+-- 循环状态机
+local loopState_   = "playing"  -- "playing" | "fading_out" | "seeking" | "fading_in"
+local fadeTimer_   = 0
 
 --- 创建开始界面覆盖层
 ---@param onEnter fun()
@@ -47,23 +57,43 @@ function M.Create(onEnter)
         top = 0, left = 0,
     })
 
-    -- 2) 循环视频背景
+    -- 2) 视频包裹层（用于淡入淡出实现无闪屏循环）
+    videoWrap_ = UI.Panel {
+        width    = "100%",
+        height   = "100%",
+        position = "absolute",
+        top = 0, left = 0,
+        opacity  = 1.0,
+        transition = "opacity " .. FADE_DUR .. "s easeInOut",
+    }
+
     videoBg_ = Video.VideoPlayer {
         src            = BG_VIDEO,
         width          = "100%",
         height         = "100%",
-        position       = "absolute",
-        top = 0, left = 0,
         textureWidth   = 1280,
         textureHeight  = 720,
         autoPlay       = true,
-        loop           = true,
+        loop           = false,          -- 关闭内置循环，手动控制
         muted          = true,
         volume         = 0,
         objectFit      = "cover",
         backgroundColor = { 0, 0, 0, 0 },
+        onEnded = function(self)
+            -- 视频自然播放结束时也做 seek 回起点
+            if loopState_ == "playing" then
+                loopState_ = "fading_out"
+                fadeTimer_ = FADE_DUR
+                if videoWrap_ then videoWrap_:SetStyle({ opacity = 0 }) end
+            end
+        end,
     }
-    startScreen_:AddChild(videoBg_)
+    videoWrap_:AddChild(videoBg_)
+    startScreen_:AddChild(videoWrap_)
+
+    -- 初始化循环状态
+    loopState_ = "playing"
+    fadeTimer_  = 0
 
     -- 3) 底部火光渐变（暖橙色，模拟篝火映照）
     startScreen_:AddChild(UI.Panel {
@@ -193,10 +223,48 @@ function M.Create(onEnter)
     return startScreen_
 end
 
---- 每帧更新（视频自动循环，无需手动驱动）
+--- 每帧更新 — 驱动无闪屏视频循环
 ---@param dt number
 function M.Update(dt)
-    -- 视频由引擎自动循环播放，无需逻辑
+    if not videoBg_ or not videoWrap_ then return end
+
+    if loopState_ == "playing" then
+        -- 监控播放时间，到达淡出起点时开始淡出
+        local t = videoBg_:GetCurrentTime()
+        if t >= FADE_START then
+            loopState_ = "fading_out"
+            fadeTimer_ = FADE_DUR
+            videoWrap_:SetStyle({ opacity = 0 })
+        end
+
+    elseif loopState_ == "fading_out" then
+        -- 等待淡出完成
+        fadeTimer_ = fadeTimer_ - dt
+        if fadeTimer_ <= 0 then
+            -- 淡出完成，Seek 回起点
+            videoBg_:Seek(0)
+            videoBg_:Play()
+            loopState_ = "seeking"
+            fadeTimer_ = 0.05  -- 给 seek 一小段缓冲时间
+        end
+
+    elseif loopState_ == "seeking" then
+        -- 等待 seek 缓冲
+        fadeTimer_ = fadeTimer_ - dt
+        if fadeTimer_ <= 0 then
+            -- 开始淡入
+            videoWrap_:SetStyle({ opacity = 1.0 })
+            loopState_ = "fading_in"
+            fadeTimer_ = FADE_DUR
+        end
+
+    elseif loopState_ == "fading_in" then
+        -- 等待淡入完成
+        fadeTimer_ = fadeTimer_ - dt
+        if fadeTimer_ <= 0 then
+            loopState_ = "playing"
+        end
+    end
 end
 
 -- 公开 API
@@ -204,8 +272,14 @@ function M.Show()
     if startScreen_ then
         startScreen_:SetVisible(true)
         YGNodeStyleSetDisplay(startScreen_.node, YGDisplayFlex)
-        -- 恢复视频播放
-        if videoBg_ then videoBg_:Play() end
+        -- 恢复视频播放并重置循环状态
+        if videoBg_ then
+            videoBg_:Seek(0)
+            videoBg_:Play()
+        end
+        if videoWrap_ then videoWrap_:SetStyle({ opacity = 1.0 }) end
+        loopState_ = "playing"
+        fadeTimer_  = 0
     end
 end
 
