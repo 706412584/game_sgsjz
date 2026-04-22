@@ -257,16 +257,19 @@ local function renderSlotContent(panel, heroId, label)
             heroId = heroId, size = 52,
             quality = hd and hd.quality or 1,
             level = st and st.level or 1, showLevel = true,
+            pointerEvents = "none",
         }))
         panel:AddChild(UI.Label {
             text = hd and hd.name or heroId, fontSize = 10,
             fontColor = qc, textAlign = "center", width = 60, maxLines = 1, marginTop = 2,
+            pointerEvents = "none",
         })
         if st then
             panel:AddChild(UI.Label {
                 text = "统"..st.tong.." 勇"..st.yong.." 智"..st.zhi,
                 fontSize = 8, fontColor = C.textDim,
                 textAlign = "center", width = 70, marginTop = 1,
+                pointerEvents = "none",
             })
         end
     else
@@ -275,11 +278,13 @@ local function renderSlotContent(panel, heroId, label)
             borderColor = C.border, borderWidth = 2, borderStyle = "dashed",
             justifyContent = "center", alignItems = "center",
             backgroundColor = { 40, 50, 65, 180 },
+            pointerEvents = "none",
             children = { UI.Label { text = "+", fontSize = 20, fontColor = C.textDim } },
         })
         panel:AddChild(UI.Label {
             text = label, fontSize = 9, fontColor = C.textDim,
             textAlign = "center", marginTop = 2,
+            pointerEvents = "none",
         })
     end
 end
@@ -366,9 +371,10 @@ local function createHeroRow(heroId)
             handleDragPointerUp(self, event)
         end,
         children = {
-            Comp.HeroAvatar({ heroId = heroId, size = 44, quality = hero.data.quality }),
+            Comp.HeroAvatar({ heroId = heroId, size = 44, quality = hero.data.quality, pointerEvents = "none" }),
             UI.Panel {
                 flexGrow = 1, flexShrink = 1, flexDirection = "column", gap = 2,
+                pointerEvents = "none",
                 children = {
                     UI.Panel {
                         flexDirection = "row", alignItems = "center", gap = 6,
@@ -386,6 +392,7 @@ local function createHeroRow(heroId)
             },
             UI.Panel {
                 width = 80, alignItems = "flex-end",
+                pointerEvents = "none",
                 children = {
                     UI.Label { text = hero.data.skill or "", fontSize = 10, fontColor = C.gold, textAlign = "right", maxLines = 1 },
                 },
