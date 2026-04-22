@@ -137,17 +137,14 @@ local function createModalPanel(config)
         end,
     }
 
-    -- 对话框主面板（带弹窗背景纹理）
+    -- 对话框主面板（纯样式边框，不用贴图）
     local dialogPanel = UI.Panel {
         width           = width,
         maxHeight       = "85%",
-        backgroundImage = "Textures/ui/modal_frame.png",
-        backgroundFit   = "sliced",
-        backgroundSlice = { top = 40, right = 40, bottom = 40, left = 40 },
-        backgroundColor = C.panel,
+        backgroundColor = { 20, 30, 55, 240 },
         borderRadius    = S.modalRadius,
         borderColor     = C.gold,
-        borderWidth     = 1,
+        borderWidth     = 2,
         padding         = S.modalPadding,
         flexDirection   = "column",
         opacity         = 0,
