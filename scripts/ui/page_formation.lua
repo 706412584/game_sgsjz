@@ -29,6 +29,10 @@ local dragCtx_
 local dragStartX_, dragStartY_ = 0, 0
 local maybeDragHero_ = nil  -- { heroId, widget }
 
+-- 英雄列表缓存: heroRows_[heroId] = { row=Panel, inLineup=bool }
+local heroRows_ = {}
+local heroOrder_ = {}  -- 排序后的 heroId 列表(创建时确定)
+
 -- 前置声明(解决循环引用)
 local refreshSlots
 local refreshHeroList
@@ -212,107 +216,136 @@ end
 ------------------------------------------------------------
 -- 刷新英雄选择列表
 ------------------------------------------------------------
-function refreshHeroList()  ---@diagnostic disable-line: lowercase-global
+--- 创建单个英雄行(仅在首次调用时执行,之后缓存复用)
+local function createHeroRow(heroId)
+    local hero = { id = heroId, data = DH.Get(heroId), state = gameState_.heroes[heroId] }
+    if not hero.data then return nil end
+
+    local stats = getHeroStats(heroId)
+    local qColor = Theme.HeroQualityColor(hero.data.quality)
+    local statsText = stats and ("统"..stats.tong.." 勇"..stats.yong.." 智"..stats.zhi) or ""
+
+    local inLineupLabel = UI.Label { text = "[已上阵]", fontSize = 9, fontColor = C.jade }
+    inLineupLabel:SetVisible(false)
+
+    local heroRow
+    heroRow = UI.Panel {
+        width = "100%", height = 56,
+        flexDirection = "row", alignItems = "center", gap = 8,
+        paddingHorizontal = 8, paddingVertical = 4,
+        backgroundColor = C.panel,
+        borderRadius = 6, borderColor = C.border, borderWidth = 1,
+        onClick = function()
+            if isInLineup(heroId) then
+                Modal.Alert("提示", hero.data.name .. " 已在阵容中")
+                return
+            end
+            local placed = false
+            if #editFront_ < 2 then
+                editFront_[#editFront_ + 1] = heroId; placed = true
+            elseif #editBack_ < 3 then
+                editBack_[#editBack_ + 1] = heroId; placed = true
+            end
+            if placed then refreshSlots()
+            else Modal.Alert("提示", "阵容已满(前排2+后排3)") end
+        end,
+        onPointerDown = function(event)
+            if isInLineup(heroId) then return end
+            dragStartX_ = event.x
+            dragStartY_ = event.y
+            maybeDragHero_ = { heroId = heroId }
+        end,
+        onPointerMove = function(event)
+            if maybeDragHero_ and dragCtx_ and not dragCtx_:IsDragging() then
+                local dx = event.x - dragStartX_
+                local dy = event.y - dragStartY_
+                if dx * dx + dy * dy > 64 then
+                    startHeroDrag(
+                        { heroId = maybeDragHero_.heroId, _srcType = "list" },
+                        heroRow, maybeDragHero_.heroId, event.x, event.y)
+                    maybeDragHero_ = nil
+                end
+            elseif dragCtx_ and dragCtx_:IsDragging() then
+                dragCtx_:UpdateDragPosition(event.x, event.y)
+            end
+        end,
+        onPointerUp = function(event)
+            if dragCtx_ and dragCtx_:IsDragging() then
+                local target = dragCtx_:FindDropTargetAt(event.x, event.y)
+                dragCtx_:EndDrag(target)
+            end
+            maybeDragHero_ = nil
+        end,
+        children = {
+            Comp.HeroAvatar({ heroId = heroId, size = 44, quality = hero.data.quality }),
+            UI.Panel {
+                flexGrow = 1, flexShrink = 1, flexDirection = "column", gap = 2,
+                children = {
+                    UI.Panel {
+                        flexDirection = "row", alignItems = "center", gap = 6,
+                        children = {
+                            UI.Label { text = hero.data.name, fontSize = 13, fontColor = qColor, fontWeight = "bold" },
+                            UI.Label { text = "Lv."..(hero.state.level or 1), fontSize = 10, fontColor = C.textDim },
+                            inLineupLabel,
+                        },
+                    },
+                    UI.Label {
+                        text = (hero.data.role or "").."  "..statsText,
+                        fontSize = 10, fontColor = C.textDim, maxLines = 1,
+                    },
+                },
+            },
+            UI.Panel {
+                width = 80, alignItems = "flex-end",
+                children = {
+                    UI.Label { text = hero.data.skill or "", fontSize = 10, fontColor = C.gold, textAlign = "right", maxLines = 1 },
+                },
+            },
+        },
+    }
+
+    heroRows_[heroId] = { row = heroRow, inLineup = false, badge = inLineupLabel }
+    return heroRow
+end
+
+--- 首次构建英雄列表(排序+创建行)
+local function buildHeroListOnce()
     if not heroListContainer_ then return end
     heroListContainer_:ClearChildren()
+    heroRows_ = {}
+    heroOrder_ = {}
 
     local owned = {}
-    for hid, hState in pairs(gameState_.heroes or {}) do
+    for hid, _ in pairs(gameState_.heroes or {}) do
         local hData = DH.Get(hid)
-        if hData then
-            owned[#owned + 1] = { id = hid, data = hData, state = hState }
-        end
+        if hData then owned[#owned + 1] = { id = hid, data = hData } end
     end
     table.sort(owned, function(a, b)
         if a.data.quality ~= b.data.quality then return a.data.quality > b.data.quality end
         return a.id < b.id
     end)
+    for _, h in ipairs(owned) do
+        heroOrder_[#heroOrder_ + 1] = h.id
+        local row = createHeroRow(h.id)
+        if row then heroListContainer_:AddChild(row) end
+    end
+end
 
-    for _, hero in ipairs(owned) do
-        local inLineup = isInLineup(hero.id)
-        local stats = getHeroStats(hero.id)
-        local qColor = Theme.HeroQualityColor(hero.data.quality)
-        local statsText = stats and ("统"..stats.tong.." 勇"..stats.yong.." 智"..stats.zhi) or ""
-
-        local heroRow
-        heroRow = UI.Panel {
-            width = "100%", height = 56,
-            flexDirection = "row", alignItems = "center", gap = 8,
-            paddingHorizontal = 8, paddingVertical = 4,
-            backgroundColor = inLineup and { 60, 70, 50, 180 } or C.panel,
-            borderRadius = 6, borderColor = C.border, borderWidth = 1,
-            opacity = inLineup and 0.6 or 1.0,
-            -- 点击兜底: 自动放入空槽
-            onClick = function()
-                if inLineup then
-                    Modal.Alert("提示", hero.data.name .. " 已在阵容中")
-                    return
-                end
-                local placed = false
-                if #editFront_ < 2 then
-                    editFront_[#editFront_ + 1] = hero.id; placed = true
-                elseif #editBack_ < 3 then
-                    editBack_[#editBack_ + 1] = hero.id; placed = true
-                end
-                if placed then refreshSlots()
-                else Modal.Alert("提示", "阵容已满(前排2+后排3)") end
-            end,
-            -- 拖拽: 按下记录起始位置
-            onPointerDown = function(event)
-                if inLineup then return end
-                dragStartX_ = event.x
-                dragStartY_ = event.y
-                maybeDragHero_ = { heroId = hero.id }
-            end,
-            onPointerMove = function(event)
-                if maybeDragHero_ and dragCtx_ and not dragCtx_:IsDragging() then
-                    local dx = event.x - dragStartX_
-                    local dy = event.y - dragStartY_
-                    if dx * dx + dy * dy > 64 then -- 8px 阈值
-                        startHeroDrag(
-                            { heroId = maybeDragHero_.heroId, _srcType = "list" },
-                            heroRow, maybeDragHero_.heroId, event.x, event.y)
-                        maybeDragHero_ = nil
-                    end
-                elseif dragCtx_ and dragCtx_:IsDragging() then
-                    dragCtx_:UpdateDragPosition(event.x, event.y)
-                end
-            end,
-            onPointerUp = function(event)
-                if dragCtx_ and dragCtx_:IsDragging() then
-                    local target = dragCtx_:FindDropTargetAt(event.x, event.y)
-                    dragCtx_:EndDrag(target)
-                end
-                maybeDragHero_ = nil
-            end,
-            children = {
-                Comp.HeroAvatar({ heroId = hero.id, size = 44, quality = hero.data.quality }),
-                UI.Panel {
-                    flexGrow = 1, flexShrink = 1, flexDirection = "column", gap = 2,
-                    children = {
-                        UI.Panel {
-                            flexDirection = "row", alignItems = "center", gap = 6,
-                            children = {
-                                UI.Label { text = hero.data.name, fontSize = 13, fontColor = qColor, fontWeight = "bold" },
-                                UI.Label { text = "Lv."..(hero.state.level or 1), fontSize = 10, fontColor = C.textDim },
-                                inLineup and UI.Label { text = "[已上阵]", fontSize = 9, fontColor = C.jade } or nil,
-                            },
-                        },
-                        UI.Label {
-                            text = (hero.data.role or "").."  "..statsText,
-                            fontSize = 10, fontColor = C.textDim, maxLines = 1,
-                        },
-                    },
-                },
-                UI.Panel {
-                    width = 80, alignItems = "flex-end",
-                    children = {
-                        UI.Label { text = hero.data.skill or "", fontSize = 10, fontColor = C.gold, textAlign = "right", maxLines = 1 },
-                    },
-                },
-            },
-        }
-        heroListContainer_:AddChild(heroRow)
+--- 增量刷新英雄列表: 只更新上阵状态样式(不销毁/重建)
+function refreshHeroList()  ---@diagnostic disable-line: lowercase-global
+    for _, heroId in ipairs(heroOrder_) do
+        local cache = heroRows_[heroId]
+        if cache then
+            local inNow = isInLineup(heroId)
+            if cache.inLineup ~= inNow then
+                cache.inLineup = inNow
+                cache.row:SetStyle({
+                    backgroundColor = inNow and { 60, 70, 50, 180 } or C.panel,
+                    opacity = inNow and 0.6 or 1.0,
+                })
+                cache.badge:SetVisible(inNow)
+            end
+        end
     end
 end
 
@@ -572,6 +605,7 @@ function M.Create(gameState, callbacks)
         },
     }
 
+    buildHeroListOnce()
     refreshSlots()
     return pagePanel_
 end
@@ -584,6 +618,8 @@ function M.Refresh(gameState)
     for _, h in ipairs(gameState.lineup.front or {}) do editFront_[#editFront_ + 1] = h end
     for _, h in ipairs(gameState.lineup.back  or {}) do editBack_[#editBack_ + 1] = h end
     refreshFormationDisplay()
+    -- 全量刷新: 英雄可能升级/新增,需要重建列表
+    buildHeroListOnce()
     refreshSlots()
 end
 
