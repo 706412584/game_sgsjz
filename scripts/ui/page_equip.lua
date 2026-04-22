@@ -367,7 +367,7 @@ local function buildSlotActions(heroId, slot)
             Comp.SanButton({
                 text = curLv >= maxLv and "强化已满" or ("强化(" .. cost .. "铜)"),
                 variant = curLv >= maxLv and "secondary" or "primary",
-                height = 30, fontSize = 10,
+                height = 34, fontSize = 12,
                 flexGrow = 1,
                 onClick = function()
                     if curLv >= maxLv then
@@ -383,7 +383,7 @@ local function buildSlotActions(heroId, slot)
             Comp.SanButton({
                 text = "卸下",
                 variant = "danger",
-                height = 30, fontSize = 10,
+                height = 34, fontSize = 12,
                 onClick = function()
                     if sendAction_ then
                         sendAction_("equip_remove", { heroId = heroId, slot = slot })
@@ -398,7 +398,7 @@ local function buildSlotActions(heroId, slot)
         actionChildren[#actionChildren + 1] = Comp.SanButton({
             text = refLv >= DE.MAX_REFINE and "精炼已满" or ("精炼 Lv." .. refLv .. "->" .. (refLv + 1)),
             variant = refLv >= DE.MAX_REFINE and "secondary" or "gold",
-            height = 30, fontSize = 10, marginTop = 4,
+            height = 34, fontSize = 12, marginTop = 4,
             onClick = function()
                 if refLv >= DE.MAX_REFINE then
                     Modal.Alert("提示", "已达精炼上限")
@@ -418,7 +418,7 @@ local function buildSlotActions(heroId, slot)
         actionChildren[#actionChildren + 1] = Comp.SanButton({
             text = "洗练(石:" .. stoneCount .. ")",
             variant = stoneCount > 0 and "primary" or "secondary",
-            height = 30, fontSize = 10, marginTop = 4,
+            height = 34, fontSize = 12, marginTop = 4,
             onClick = function()
                 if sendAction_ then
                     sendAction_("equip_reforge", {
@@ -487,8 +487,8 @@ local function createBagItem(bagIndex, equipInst)
             Comp.SanButton({
                 text = "穿戴",
                 variant = "primary",
-                height = 28, fontSize = 10,
-                paddingHorizontal = 10,
+                height = 34, fontSize = 12,
+                paddingHorizontal = 12,
                 onClick = function()
                     if selectedHeroId_ and sendAction_ then
                         sendAction_("equip_wear", {

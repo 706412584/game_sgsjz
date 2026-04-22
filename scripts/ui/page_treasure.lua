@@ -205,9 +205,9 @@ local function buildBagSection(state)
                 Comp.SanButton {
                     text = "槽1",
                     variant = "primary",
-                    fontSize = 10,
-                    height = 26,
-                    paddingHorizontal = 8,
+                    fontSize = 12,
+                    height = 34,
+                    paddingHorizontal = 10,
                     onClick = function()
                         sendAction_("treasure_equip", {
                             heroId = selectedHeroId_,
@@ -220,9 +220,9 @@ local function buildBagSection(state)
                 Comp.SanButton {
                     text = "槽2",
                     variant = "primary",
-                    fontSize = 10,
-                    height = 26,
-                    paddingHorizontal = 8,
+                    fontSize = 12,
+                    height = 34,
+                    paddingHorizontal = 10,
                     onClick = function()
                         sendAction_("treasure_equip", {
                             heroId = selectedHeroId_,
@@ -297,9 +297,9 @@ local function buildComposeSection(state)
                 Comp.SanButton {
                     text = "合成",
                     variant = "gold",
-                    fontSize = 10,
-                    height = 24,
-                    paddingHorizontal = 8,
+                    fontSize = 12,
+                    height = 34,
+                    paddingHorizontal = 12,
                     disabled = (state.inventory.treasure_shards or 0) < (tmpl.composeCost or 50),
                     onClick = function()
                         sendAction_("treasure_compose", { templateId = tid })
@@ -338,9 +338,9 @@ local function buildComposeSection(state)
                         Comp.SanButton {
                             text = "合成",
                             variant = "gold",
-                            fontSize = 10,
-                            height = 24,
-                            paddingHorizontal = 8,
+                            fontSize = 12,
+                            height = 34,
+                            paddingHorizontal = 12,
                             disabled = (state.inventory.exclusive_shards or 0) < (exTmpl.composeCost or 30),
                             onClick = function()
                                 sendAction_("treasure_compose_exclusive", {
