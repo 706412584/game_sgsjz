@@ -174,7 +174,7 @@ local function createProgressInfo(gameState)
     local DM = require("data.data_maps")
     local DS = require("data.data_state")
     local curMap = gameState.currentMap or 1
-    local mapData = DM.MAP_LIST[curMap]
+    local mapData = DM.MAPS[curMap]
     local mapName = mapData and mapData.name or ("第" .. curMap .. "图")
 
     -- 计算当前图星级进度
