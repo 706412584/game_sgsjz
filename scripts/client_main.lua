@@ -11,6 +11,8 @@ local HeroesPage    = require("ui.page_heroes")
 local BattlePage    = require("ui.page_battle")
 local FormationPage = require("ui.page_formation")
 local RecruitPage   = require("ui.page_recruit")
+local ShopPage      = require("ui.page_shop")
+local ShopData      = require("data.data_shop")
 local Modal         = require("ui.modal_manager")
 local StartPage     = require("ui.page_start")
 local DebugLog      = require("ui.debug_log")
@@ -87,7 +89,7 @@ local function switchPage(pageId)
                 elseif buildingId == "arena" then
                     Modal.Alert("演武场", "竞技系统开发中，敬请期待！")
                 elseif buildingId == "shop" then
-                    Modal.Alert("商城", "商城系统开发中，敬请期待！")
+                    switchPage("shop")
                 end
             end,
             onQuickAction = function(actionId)
@@ -210,6 +212,38 @@ local function switchPage(pageId)
                 end
             end,
         }))
+
+    elseif pageId == "shop" then
+        contentContainer_:AddChild(ShopPage.Create(gs(), {
+            onBuy = function(shopType, itemId)
+                if isNetworkMode_ then
+                    if shopType == "resource" then
+                        ClientNet.SendAction("buy_shop_item", { itemId = itemId })
+                    elseif shopType == "gift" then
+                        ClientNet.SendAction("buy_gift_pack", { packId = itemId })
+                    elseif shopType == "recharge" then
+                        ClientNet.SendAction("recharge", { tierId = itemId })
+                    end
+                else
+                    -- 单机模式: 本地处理
+                    local ok, msg
+                    if shopType == "resource" then
+                        ok, msg = ShopData.BuyResourceItem(gs(), itemId)
+                    elseif shopType == "gift" then
+                        ok, msg = ShopData.BuyGiftPack(gs(), itemId)
+                    elseif shopType == "recharge" then
+                        ok, msg = ShopData.DoRecharge(gs(), itemId)
+                    end
+                    if ok then
+                        Modal.Alert("购买成功", msg or "购买成功！")
+                    else
+                        Modal.Alert("提示", msg or "购买失败")
+                    end
+                    ShopPage.Refresh(gs())
+                    HUD.Update(gs())
+                end
+            end,
+        }))
     end
 
     print("[三国神将录] 切换页面: " .. pageId)
@@ -268,6 +302,19 @@ local function handleGameEvt(evtType, data)
             end
         else
             Modal.Alert("提示", tostring(data.msg or "十连招募失败"))
+        end
+        HUD.Update(gs())
+
+    elseif evtType == "shop_result" then
+        if data.success then
+            local typeNames = { resource = "商品", gift = "礼包", recharge = "充值" }
+            local label = typeNames[data.shopType] or "商品"
+            Modal.Alert("购买成功", label .. "购买成功！")
+        else
+            Modal.Alert("提示", data.msg or "购买失败")
+        end
+        if currentPage_ == "shop" then
+            ShopPage.Refresh(gs())
         end
         HUD.Update(gs())
 
@@ -442,6 +489,8 @@ function Start()
             MapPage.Refresh(gs())
         elseif currentPage_ == "recruit" then
             RecruitPage.Refresh(gs())
+        elseif currentPage_ == "shop" then
+            ShopPage.Refresh(gs())
         end
     end
 

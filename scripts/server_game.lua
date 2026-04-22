@@ -8,6 +8,7 @@
 
 local State   = require("data.data_state")
 local Battle  = require("data.battle_engine")
+local Shop    = require("data.data_shop")
 local Shared  = require("network.shared")
 local EVENTS  = Shared.EVENTS
 
@@ -526,6 +527,64 @@ ACTION_HANDLERS["set_lineup"] = function(userId, params)
         action  = "set_lineup",
         success = true,
         msg     = "阵容已更新",
+    })
+    sendSync(userId)
+end
+
+---- buy_shop_item: 购买资源商品
+ACTION_HANDLERS["buy_shop_item"] = function(userId, params)
+    local state = players_[userId]
+    local itemId = params.itemId
+    if not itemId then
+        sendEvt(userId, "error", { msg = "缺少商品ID" })
+        return
+    end
+    local ok, msg = Shop.BuyResourceItem(state, itemId)
+    dirty_[userId] = true
+    sendEvt(userId, "shop_result", {
+        success  = ok,
+        msg      = msg,
+        shopType = "resource",
+        itemId   = itemId,
+    })
+    sendSync(userId)
+end
+
+---- buy_gift_pack: 购买礼包
+ACTION_HANDLERS["buy_gift_pack"] = function(userId, params)
+    local state = players_[userId]
+    local packId = params.packId
+    if not packId then
+        sendEvt(userId, "error", { msg = "缺少礼包ID" })
+        return
+    end
+    local ok, msg = Shop.BuyGiftPack(state, packId)
+    dirty_[userId] = true
+    sendEvt(userId, "shop_result", {
+        success  = ok,
+        msg      = msg,
+        shopType = "gift",
+        packId   = packId,
+    })
+    sendSync(userId)
+end
+
+---- recharge: 模拟充值
+ACTION_HANDLERS["recharge"] = function(userId, params)
+    local state = players_[userId]
+    local tierId = params.tierId
+    if not tierId then
+        sendEvt(userId, "error", { msg = "缺少充值档位" })
+        return
+    end
+    local ok, msg, total = Shop.DoRecharge(state, tierId)
+    dirty_[userId] = true
+    sendEvt(userId, "shop_result", {
+        success  = ok,
+        msg      = msg,
+        shopType = "recharge",
+        tierId   = tierId,
+        yuanbao  = total,
     })
     sendSync(userId)
 end
