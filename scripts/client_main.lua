@@ -12,6 +12,7 @@ local BattlePage    = require("ui.page_battle")
 local FormationPage = require("ui.page_formation")
 local Modal         = require("ui.modal_manager")
 local StartPage     = require("ui.page_start")
+local DebugLog      = require("ui.debug_log")
 local ServerUI      = require("ui.page_server")
 local DM            = require("data.data_maps")
 local DH            = require("data.data_heroes")
@@ -374,6 +375,9 @@ function Start()
         },
     }
     UI.SetRoot(root)
+
+    -- 启用调试面板（悬浮在右上角，默认最小化为小圆圈）
+    DebugLog.Enable(root)
 
     -- 状态变更 → 自动刷新 HUD
     State.onStateChanged = function()

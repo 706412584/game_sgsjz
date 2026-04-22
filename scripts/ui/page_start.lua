@@ -11,18 +11,22 @@ local onEnterCallback_ = nil
 local enterBtn_        = nil
 local enterEnabled_    = false
 
--- 帧动画状态（4 个独立 Panel，切换可见性）
-local EMBER_IMAGES = {
+-- 帧动画状态（双层 A/B 交叉淡入淡出）
+local EMBER_FRAMES = {
     "image/embers_f1_20260421160716.png",
     "image/embers_f2_20260421160810.png",
     "image/embers_f3_20260421160808.png",
     "image/embers_f4_20260421160813.png",
 }
-local FRAME_COUNT   = #EMBER_IMAGES
-local FRAME_TIME    = 0.18
-local emberPanels_  = {}     -- 4 个帧 Panel
-local frameTimer_   = 0
-local frameIndex_   = 1
+local FRAME_COUNT    = #EMBER_FRAMES
+local FRAME_INTERVAL = 1.0      -- 每帧停留秒数
+local FRAME_FADE     = 0.6      -- 交叉淡入淡出时长
+local EMBER_OPACITY  = 0.7
+local bgLayerA_      = nil      -- 当前显示层
+local bgLayerB_      = nil      -- 淡入过渡层
+local frameTimer_    = 0
+local frameIndex_    = 1
+local frameFading_   = false    -- 是否正在淡入淡出
 
 --- 创建开始界面覆盖层
 ---@param onEnter fun()
@@ -32,7 +36,9 @@ function M.Create(onEnter)
     enterEnabled_ = false
     frameTimer_  = 0
     frameIndex_  = 1
-    emberPanels_ = {}
+    frameFading_ = false
+    bgLayerA_    = nil
+    bgLayerB_    = nil
 
     startScreen_ = UI.Panel {
         id            = "start_screen",
@@ -66,25 +72,29 @@ function M.Create(onEnter)
         backgroundColor = { 40, 15, 5, 30 },
     })
 
-    -- 3) 火星帧动画（4 个独立 Panel，切换可见性）
-    for i = 1, FRAME_COUNT do
-        local visible = (i == 1)
-        local p = UI.Panel {
-            backgroundImage = EMBER_IMAGES[i],
-            backgroundFit   = "cover",
-            width           = "100%",
-            height          = "100%",
-            position        = "absolute",
-            top = 0, left = 0,
-            opacity         = 0.7,
-        }
-        if not visible then
-            p:SetVisible(false)
-            YGNodeStyleSetDisplay(p.node, YGDisplayNone)
-        end
-        emberPanels_[i] = p
-        startScreen_:AddChild(p)
-    end
+    -- 3) 火星帧动画（双层 A/B 交叉淡入淡出）
+    bgLayerA_ = UI.Panel {
+        backgroundImage = EMBER_FRAMES[1],
+        backgroundFit   = "cover",
+        width           = "100%",
+        height          = "100%",
+        position        = "absolute",
+        top = 0, left = 0,
+        opacity         = EMBER_OPACITY,
+    }
+    bgLayerB_ = UI.Panel {
+        backgroundImage = EMBER_FRAMES[1],
+        backgroundFit   = "cover",
+        width           = "100%",
+        height          = "100%",
+        position        = "absolute",
+        top = 0, left = 0,
+        opacity         = 0,
+    }
+    startScreen_:AddChild(bgLayerA_)
+    startScreen_:AddChild(bgLayerB_)
+    print("[StartPage] Create: bgLayerA_=" .. tostring(bgLayerA_) .. " bgLayerB_=" .. tostring(bgLayerB_))
+    print("[StartPage] Create: FRAME_COUNT=" .. FRAME_COUNT .. " INTERVAL=" .. FRAME_INTERVAL .. " FADE=" .. FRAME_FADE)
 
     -- 4) 底部火光渐变（暖橙色，模拟篝火映照）
     startScreen_:AddChild(UI.Panel {
@@ -211,26 +221,61 @@ function M.Create(onEnter)
     return startScreen_
 end
 
---- 每帧更新火星帧动画（切换 Panel 可见性）
+--- 每帧更新火星帧动画（双层 A/B 交叉淡入淡出）
 ---@param dt number
+local updateLogTimer_ = 0
 function M.Update(dt)
+    -- 每 2 秒输出一次帧动画状态
+    updateLogTimer_ = updateLogTimer_ + dt
+    if updateLogTimer_ >= 2.0 then
+        updateLogTimer_ = 0
+        print("[StartPage] Update: screen=" .. tostring(startScreen_ ~= nil)
+            .. " visible=" .. tostring(M.IsVisible())
+            .. " layerA=" .. tostring(bgLayerA_ ~= nil)
+            .. " layerB=" .. tostring(bgLayerB_ ~= nil)
+            .. " fading=" .. tostring(frameFading_)
+            .. " timer=" .. string.format("%.2f", frameTimer_)
+            .. " idx=" .. tostring(frameIndex_))
+    end
+
     if not startScreen_ or not M.IsVisible() then return end
-    if #emberPanels_ == 0 then return end
+    if not bgLayerA_ or not bgLayerB_ then return end
+    if frameFading_ then return end  -- 淡入淡出进行中，等待完成
 
     frameTimer_ = frameTimer_ + dt
-    if frameTimer_ >= FRAME_TIME then
-        frameTimer_ = frameTimer_ - FRAME_TIME
-        -- 隐藏当前帧
-        local cur = emberPanels_[frameIndex_]
-        cur:SetVisible(false)
-        YGNodeStyleSetDisplay(cur.node, YGDisplayNone)
-        -- 前进到下一帧
-        frameIndex_ = frameIndex_ % FRAME_COUNT + 1
-        -- 显示新帧
-        local nxt = emberPanels_[frameIndex_]
-        nxt:SetVisible(true)
-        YGNodeStyleSetDisplay(nxt.node, YGDisplayFlex)
-    end
+    if frameTimer_ < FRAME_INTERVAL then return end
+    frameTimer_ = 0
+
+    -- 计算下一帧
+    local nextIdx = frameIndex_ % FRAME_COUNT + 1
+    local nextImage = EMBER_FRAMES[nextIdx]
+    print("[StartPage] FrameSwitch: " .. frameIndex_ .. " -> " .. nextIdx .. " img=" .. nextImage)
+
+    -- B 层设置下一帧图片并淡入
+    bgLayerB_:SetStyle({ backgroundImage = nextImage })
+    frameFading_ = true
+    bgLayerB_:Animate({
+        keyframes = {
+            [0] = { opacity = 0 },
+            [1] = { opacity = EMBER_OPACITY },
+        },
+        duration = FRAME_FADE,
+        easing   = "easeInOut",
+        fillMode = "forwards",
+        onComplete = function()
+            print("[StartPage] FadeComplete: idx=" .. nextIdx)
+            -- 淡入完成：A 层换成当前帧图（瞬间），B 层归零
+            if bgLayerA_ then
+                bgLayerA_:SetStyle({ backgroundImage = nextImage })
+            end
+            if bgLayerB_ then
+                bgLayerB_.props.opacity = 0
+                bgLayerB_.renderProps_.opacity = nil
+            end
+            frameIndex_ = nextIdx
+            frameFading_ = false
+        end,
+    })
 end
 
 -- 公开 API
