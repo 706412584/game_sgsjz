@@ -21,7 +21,7 @@ local editFormation_ = "feng_shi"
 
 -- UI 引用
 local slotPanels_    = { front = {}, back = {} }
-local powerLabel_, heroListContainer_
+local powerLabel_, heroListContainer_, heroListScroll_
 local formationBtnLabel_, formationDescLabel_, formationListPanel_
 
 -- 拖放状态
@@ -114,6 +114,10 @@ local function stopDragTracking()
         dragUpdateBound_ = false
     end
     maybeDragHero_ = nil
+    -- 恢复英雄列表指针事件(拖拽期间被禁用以跳过 hit testing)
+    if heroListScroll_ and heroListScroll_.props then
+        heroListScroll_.props.pointerEvents = nil
+    end
 end
 
 --- 启动每帧拖拽追踪: 订阅 Update 事件, 轮询鼠标位置
@@ -163,6 +167,10 @@ end
 startHeroDrag = function(itemData, widget, heroId, x, y)
     if not dragCtx_ then return end
     cachedCtxLayout_ = nil  -- 重置缓存,首次 move 时重算
+    -- 禁用英雄列表指针事件: findWidgetAt 跳过 pointerEvents="none" 的子树
+    if heroListScroll_ and heroListScroll_.props then
+        heroListScroll_.props.pointerEvents = "none"
+    end
     dragCtx_:StartDrag(itemData, widget, "", x, y)
     local hd = DH.Get(heroId)
     local qc = Theme.HeroQualityColor(hd and hd.quality or 0)
@@ -622,6 +630,7 @@ function M.Create(gameState, callbacks)
 
     -- 英雄列表
     heroListContainer_ = UI.Panel { width = "100%", flexDirection = "column", gap = 4, padding = 4 }
+    heroListScroll_ = UI.ScrollView { flexGrow = 1, flexBasis = 0, scrollY = true, padding = 4, children = { heroListContainer_ } }
 
     pagePanel_ = UI.Panel {
         width = "100%", flexGrow = 1, flexBasis = 0, flexDirection = "row", backgroundColor = C.bg,
@@ -639,7 +648,7 @@ function M.Create(gameState, callbacks)
                         },
                     },
                     Comp.SanDivider({ spacing = 2 }),
-                    UI.ScrollView { flexGrow = 1, flexBasis = 0, scrollY = true, padding = 4, children = { heroListContainer_ } },
+                    heroListScroll_,
                 },
             },
             dragCtx_,
