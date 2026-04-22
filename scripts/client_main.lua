@@ -54,7 +54,6 @@ local currentPage_    = ""
 local previousPage_   = "city"
 local contentContainer_
 local overlayContainer_
-local backButton_
 
 -- 切换页面
 local function switchPage(pageId)
@@ -66,15 +65,34 @@ local function switchPage(pageId)
     contentContainer_:ClearChildren()
     Modal.CloseAll()
 
-    local showBack = (pageId ~= "city")
-    if backButton_ then
-        backButton_:SetStyle({ opacity = showBack and 1 or 0 })
-        backButton_.disabled = not showBack
-        if pageId == "formation" then
-            backButton_.text = "返回"
-        else
-            backButton_.text = "返回主城"
-        end
+    -- 非主城页面：顶部插入返回按钮行
+    if pageId ~= "city" then
+        local backText = (pageId == "formation") and "返回" or "返回主城"
+        local backBar = UI.Panel {
+            width          = "100%",
+            flexDirection  = "row",
+            justifyContent = "flex-end",
+            paddingRight   = 15,
+            paddingTop     = 6,
+            paddingBottom  = 4,
+            children = {
+                Comp.SanButton {
+                    text    = backText,
+                    variant = "primary",
+                    onClick = function()
+                        print("[返回按钮] onClick 触发! page=" .. currentPage_)
+                        if currentPage_ == "formation" then
+                            local backTo = previousPage_
+                            if backTo == "" or backTo == "formation" then backTo = "city" end
+                            switchPage(backTo)
+                        else
+                            switchPage("city")
+                        end
+                    end,
+                },
+            },
+        }
+        contentContainer_:AddChild(backBar)
     end
 
     if pageId == "city" then
@@ -466,40 +484,13 @@ function Start()
         position = "absolute",
         top = 0, left = 0, right = 0, bottom = 0,
         width = "100%", height = "100%",
+        visible = false,
     }
     Modal.Init(overlayContainer_)
+    -- 初始隐藏，防止空弹窗层拦截所有点击
+    YGNodeStyleSetDisplay(overlayContainer_.node, YGDisplayNone)
 
-    -- 返回按钮（使用翡翠金框贴图，与 SanButton primary 一致）
-    backButton_ = UI.Button {
-        text               = "返回主城",
-        position           = "absolute",
-        top                = 63,
-        right              = 15,
-        height             = S.btnHeight,
-        paddingHorizontal  = 20,
-        fontSize           = S.btnFontSize,
-        fontWeight         = "bold",
-        textColor          = C.text,
-        backgroundImage    = "Textures/ui/btn_primary.png",
-        backgroundFit      = "sliced",
-        backgroundSlice    = { top = 16, right = 16, bottom = 16, left = 16 },
-        backgroundColor    = { 0, 0, 0, 0 },
-        hoverBackgroundColor = { 255, 255, 255, 20 },
-        pressedBackgroundColor = { 0, 0, 0, 40 },
-        borderRadius       = S.btnRadius,
-        opacity            = 0,
-        disabled           = true,
-        transition         = "opacity 0.2s easeOut",
-        onClick = function()
-            if currentPage_ == "formation" then
-                local backTo = previousPage_
-                if backTo == "" or backTo == "formation" then backTo = "city" end
-                switchPage(backTo)
-            else
-                switchPage("city")
-            end
-        end,
-    }
+    -- 返回按钮已改为 switchPage 内动态创建（非 absolute 定位）
 
     -- 内容区
     contentContainer_ = UI.Panel {
@@ -538,7 +529,6 @@ function Start()
             HUD.Create(),
             contentContainer_,
             overlayContainer_,
-            backButton_,
             startPanel,
         },
     }

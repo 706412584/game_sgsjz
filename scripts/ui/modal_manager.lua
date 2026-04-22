@@ -203,6 +203,10 @@ function M.Show(config)
     local entry = createModalPanel(config)
     modalStack_[#modalStack_ + 1] = entry
 
+    -- 显示弹窗层容器
+    overlayRoot_:SetVisible(true)
+    YGNodeStyleSetDisplay(overlayRoot_.node, YGDisplayFlex)
+
     overlayRoot_:AddChild(entry.overlay)
 
     -- 延迟一帧触发入场动画
@@ -225,6 +229,12 @@ function M.Close()
     -- 回调
     if entry.config and entry.config.onClose then
         entry.config.onClose()
+    end
+
+    -- 弹窗全部关闭时隐藏容器
+    if #modalStack_ == 0 then
+        overlayRoot_:SetVisible(false)
+        YGNodeStyleSetDisplay(overlayRoot_.node, YGDisplayNone)
     end
 
     -- 延迟移除（等动画播完）
@@ -251,6 +261,11 @@ function M.CloseAll()
         end
     end
     modalStack_ = {}
+    -- 隐藏容器，避免拦截点击
+    if overlayRoot_ then
+        overlayRoot_:SetVisible(false)
+        YGNodeStyleSetDisplay(overlayRoot_.node, YGDisplayNone)
+    end
 end
 
 --- 确认弹窗
