@@ -1,6 +1,12 @@
 ------------------------------------------------------------
 -- ui/page_city.lua  —— 三国神将录 主城页面 (2.5D 等距风格)
--- 等距底图 + 独立建筑贴图(透明) + 绝对定位点击区域
+-- 等距底图 + 独立建筑贴图(透明) + cover 变换精确定位
+--
+-- 定位原理:
+--   建筑中心点定义在原始底图像素坐标系 (1935×1080) 中，
+--   运行时根据 backgroundFit="cover" 的缩放/裁剪变换
+--   把底图坐标映射到屏幕坐标，建筑尺寸同步缩放。
+--   不同屏幕尺寸下建筑始终对齐底图格子。
 ------------------------------------------------------------
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
@@ -10,66 +16,77 @@ local S     = Theme.sizes
 local M = {}
 
 ------------------------------------------------------------
+-- 原始底图尺寸
+------------------------------------------------------------
+local IMG_W = 1935
+local IMG_H = 1080
+
+------------------------------------------------------------
+-- 建筑基础尺寸（底图像素空间，约为格子宽度的 65%）
+------------------------------------------------------------
+local BASE_BLD_SIZE = 180
+
+------------------------------------------------------------
 -- 建筑配置
--- pctX / pctY: 0.0~1.0，相对于内容区左上角（百分比定位）
--- 建筑贴图已替换为等距风格透明 PNG
+-- cx/cy: 建筑中心点在原始底图中的像素坐标
+-- 通过观察底图石板路网格确定每个空地格子的中心
 ------------------------------------------------------------
 local BUILDINGS = {
-    {
+    {   -- 左上格子（樱花带与竹林之间的空地）
         id    = "battle",
         name  = "推图殿",
         desc  = "征战天下，推进地图",
         image = "Textures/buildings/bld_battle_iso.png",
-        pctX  = 0.05,
-        pctY  = 0.08,
+        cx    = 620,
+        cy    = 260,
     },
-    {
+    {   -- 中上格子（城中央大空地）
         id    = "recruit",
         name  = "招募亭",
         desc  = "招募新武将",
         image = "Textures/buildings/bld_recruit_iso.png",
-        pctX  = 0.28,
-        pctY  = 0.02,
+        cx    = 920,
+        cy    = 300,
     },
-    {
+    {   -- 右上格子（竹林左侧空地）
         id    = "heroes",
         name  = "武将阁",
         desc  = "管理武将，强化阵容",
         image = "Textures/buildings/bld_heroes_iso.png",
-        pctX  = 0.72,
-        pctY  = 0.02,
+        cx    = 1180,
+        cy    = 220,
     },
-    {
+    {   -- 左中格子（池塘右上方空地）
         id    = "forge",
         name  = "铁匠铺",
         desc  = "打造装备，强化武器",
         image = "Textures/buildings/bld_forge_iso.png",
-        pctX  = 0.05,
-        pctY  = 0.46,
+        cx    = 550,
+        cy    = 470,
     },
-    {
+    {   -- 中心偏下格子（十字路口下方）
         id    = "treasure",
         name  = "宝物阁",
         desc  = "收集宝物，增强武将",
         image = "Textures/buildings/bld_treasure_iso.png",
-        pctX  = 0.30,
-        pctY  = 0.42,
+        cx    = 880,
+        cy    = 540,
     },
-    {
+    {   -- 右中格子（稻田左侧空地）
         id    = "arena",
         name  = "演武场",
         desc  = "切磋比武，竞技排名",
         image = "Textures/buildings/bld_arena_iso.png",
-        pctX  = 0.54,
-        pctY  = 0.40,
+        cx    = 1200,
+        cy    = 460,
     },
-    {
+    {   -- 中心格子（十字路口附近）
         id    = "shop",
         name  = "商城",
         desc  = "购买道具与资源",
         image = "Textures/buildings/bld_shop_iso.png",
-        pctX  = 0.80,
-        pctY  = 0.44,
+        cx    = 770,
+        cy    = 390,
     },
 }
 
@@ -80,43 +97,40 @@ local callbacks_ = {}
 local cityPanel_ = nil
 
 ------------------------------------------------------------
--- 建筑尺寸
+-- 创建单个建筑 Widget（尺寸由外部传入，跟随 cover 缩放）
 ------------------------------------------------------------
-local BUILDING_SIZE = 130
-local BUILDING_CELL = BUILDING_SIZE + 20  -- 容器宽度（图片+间距）
-
-------------------------------------------------------------
--- 创建单个建筑 Widget
-------------------------------------------------------------
-local function createBuildingWidget(bld, posX, posY)
+local function createBuildingWidget(bld, posX, posY, bldSize)
     local function onTap()
         if callbacks_.onBuildingClick then
             callbacks_.onBuildingClick(bld.id, bld)
         end
     end
 
+    local cellW = bldSize + 16
+
     -- 建筑图片
     local imgPanel = UI.Panel {
-        width           = BUILDING_SIZE,
-        height          = BUILDING_SIZE,
+        width           = bldSize,
+        height          = bldSize,
         backgroundImage = bld.image,
         backgroundFit   = "contain",
         cursor          = "pointer",
         onClick         = onTap,
     }
 
-    -- 名称标签（建筑下方）
+    -- 名称标签
+    local fontSize = math.max(10, math.floor(bldSize * 0.12))
     local nameLabel = UI.Button {
         text                   = bld.name,
-        fontSize               = 13,
+        fontSize               = fontSize,
         fontWeight              = "bold",
         textColor              = C.text,
-        height                 = 24,
-        paddingHorizontal      = 12,
+        height                 = fontSize + 10,
+        paddingHorizontal      = 10,
         backgroundColor        = { 20, 28, 45, 200 },
         hoverBackgroundColor   = C.jadeHover,
         pressedBackgroundColor = C.jadePressed,
-        borderRadius           = 12,
+        borderRadius           = math.floor((fontSize + 10) / 2),
         borderColor            = { C.gold[1], C.gold[2], C.gold[3], 120 },
         borderWidth            = 1,
         transition             = "all 0.15s easeOut",
@@ -127,9 +141,9 @@ local function createBuildingWidget(bld, posX, posY)
         position   = "absolute",
         left       = posX,
         top        = posY,
-        width      = BUILDING_CELL,
+        width      = cellW,
         alignItems = "center",
-        gap        = 3,
+        gap        = 2,
         children   = { imgPanel, nameLabel },
     }
 end
@@ -269,21 +283,53 @@ function M.Create(gameState, opts)
     opts = opts or {}
     callbacks_ = opts
 
-    -- 屏幕 & 内容区尺寸
+    -- 屏幕 & 内容区尺寸（面板实际大小）
     local dpr = graphics:GetDPR()
     local screenW = graphics:GetWidth() / dpr
     local screenH = graphics:GetHeight() / dpr
-    local contentH = screenH - S.hudHeight
+    local panelW = screenW
+    local panelH = screenH - S.hudHeight
 
-    print(string.format("[主城] 屏幕: %.0fx%.0f, 内容区: %.0fx%.0f", screenW, screenH, screenW, contentH))
+    print(string.format("[主城] 面板: %.0fx%.0f", panelW, panelH))
+
+    ----------------------------------------------------------------
+    -- 计算 backgroundFit="cover" 的缩放/裁剪变换
+    -- cover: 等比缩放使图片完全覆盖面板，多余部分居中裁剪
+    ----------------------------------------------------------------
+    local scaleX = panelW / IMG_W
+    local scaleY = panelH / IMG_H
+    local coverScale = math.max(scaleX, scaleY)
+
+    -- 缩放后的图片实际显示尺寸
+    local dispW = IMG_W * coverScale
+    local dispH = IMG_H * coverScale
+
+    -- 居中裁剪偏移（正值表示被裁掉的像素）
+    local cropX = (dispW - panelW) / 2
+    local cropY = (dispH - panelH) / 2
+
+    -- 建筑尺寸跟随 cover 缩放
+    local bldSize = math.floor(BASE_BLD_SIZE * coverScale)
+    -- 限制最小/最大
+    bldSize = math.max(60, math.min(bldSize, 160))
+    local cellW = bldSize + 16
+
+    print(string.format("[主城] coverScale=%.3f, crop=(%.0f,%.0f), bldSize=%d",
+        coverScale, cropX, cropY, bldSize))
 
     -- 建筑 Widget 列表
     local children = {}
 
     for _, bld in ipairs(BUILDINGS) do
-        local posX = math.floor(bld.pctX * screenW)
-        local posY = math.floor(bld.pctY * contentH)
-        children[#children + 1] = createBuildingWidget(bld, posX, posY)
+        -- 底图像素坐标 → 屏幕坐标
+        local sx = bld.cx * coverScale - cropX
+        local sy = bld.cy * coverScale - cropY
+
+        -- 居中对齐：容器左上角 = 中心点 - 容器半宽/半高
+        local posX = math.floor(sx - cellW / 2)
+        local posY = math.floor(sy - bldSize / 2)
+
+        children[#children + 1] = createBuildingWidget(bld, posX, posY, bldSize)
     end
 
     -- 底部浮层
