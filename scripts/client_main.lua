@@ -104,6 +104,11 @@ local function switchPage(pageId)
                     Modal.Alert("商城", "商城系统开发中，敬请期待！")
                 end
             end,
+            onQuickAction = function(actionId)
+                if actionId == "formation" then
+                    switchPage("formation")
+                end
+            end,
         }))
 
     elseif pageId == "map" then
