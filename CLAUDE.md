@@ -344,6 +344,9 @@ connection:SendRemoteEvent(Shared.EVENTS.GAME_ACTION, true, data)
 | `recruit` | - | 招募 |
 | `compose_hero` | `{heroId}` | 碎片合成 |
 | `set_lineup` | `{formation, front, back}` | 设置阵容 |
+| `buy_shop_item` | `{itemId}` | 购买资源商品 |
+| `buy_gift_pack` | `{packId}` | 购买礼包 |
+| `recharge` | `{tierId}` | 模拟充值 |
 
 **新增 Action 时必须更新本清单。**
 
