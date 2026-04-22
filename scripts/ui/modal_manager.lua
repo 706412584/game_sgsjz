@@ -239,17 +239,17 @@ function M.Close()
 
     -- 延迟移除（等动画播完）
     local removeTimer = 0
-    local removeHandler
-    removeHandler = function(_, ed)
+    local removeDone = false
+    SubscribeToEvent("Update", function(_, ed)
+        if removeDone then return end
         removeTimer = removeTimer + ed["TimeStep"]:GetFloat()
         if removeTimer > 0.3 then
-            UnsubscribeFromEvent("Update", removeHandler)
+            removeDone = true
             if entry.overlay then
                 overlayRoot_:RemoveChild(entry.overlay)
             end
         end
-    end
-    SubscribeToEvent("Update", removeHandler)
+    end)
 end
 
 --- 关闭所有弹窗
