@@ -12,20 +12,20 @@ local enterBtn_        = nil
 local enterEnabled_    = false
 
 -- 帧动画状态（双层 A/B 交叉淡入淡出 — 完整背景帧）
-local EMBER_FRAMES = {
-    "image/start_fire_f1_20260422063256.png",
-    "image/start_fire_f2_20260422063306.png",
-    "image/start_fire_f3_20260422063332.png",
-    "image/start_fire_f4_20260422063329.png",
+-- 序列: f1(无火) → f2(起火) → f3(旺盛) → f4(旺盛变体) → 之后 f3↔f4 循环
+local FIRE_FRAMES = {
+    "image/start_fire_f1_20260422064736.png",   -- 无火，火球远处
+    "image/start_fire_f2_20260422064619.png",   -- 小火苗，火球逼近
+    "image/start_fire_f3_20260422064621.png",   -- 旺盛，火球落地
+    "image/start_fire_f4_20260422064622.png",   -- 旺盛变体，火球炸开
 }
-local FRAME_COUNT    = #EMBER_FRAMES
 local FRAME_INTERVAL = 1.2      -- 每帧停留秒数
 local FRAME_FADE     = 0.8      -- 交叉淡入淡出时长
-local EMBER_OPACITY  = 1.0
 local bgLayerA_      = nil      -- 当前显示层
 local bgLayerB_      = nil      -- 淡入过渡层
 local frameTimer_    = 0
-local frameIndex_    = 1
+local frameIndex_    = 1        -- 当前帧 (1-4)
+local introPlayed_   = false    -- 开场 1→2→3→4 是否播完
 local frameFading_   = false    -- 是否正在淡入淡出
 
 --- 创建开始界面覆盖层
@@ -34,11 +34,12 @@ local frameFading_   = false    -- 是否正在淡入淡出
 function M.Create(onEnter)
     onEnterCallback_ = onEnter
     enterEnabled_ = false
-    frameTimer_  = 0
-    frameIndex_  = 1
-    frameFading_ = false
-    bgLayerA_    = nil
-    bgLayerB_    = nil
+    frameTimer_   = 0
+    frameIndex_   = 1
+    introPlayed_  = false
+    frameFading_  = false
+    bgLayerA_     = nil
+    bgLayerB_     = nil
 
     startScreen_ = UI.Panel {
         id            = "start_screen",
@@ -55,16 +56,16 @@ function M.Create(onEnter)
 
     -- 1) 火把帧动画背景（双层 A/B 交叉淡入淡出）
     bgLayerA_ = UI.Panel {
-        backgroundImage = EMBER_FRAMES[1],
+        backgroundImage = FIRE_FRAMES[1],
         backgroundFit   = "cover",
         width           = "100%",
         height          = "100%",
         position        = "absolute",
         top = 0, left = 0,
-        opacity         = EMBER_OPACITY,
+        opacity         = 1.0,
     }
     bgLayerB_ = UI.Panel {
-        backgroundImage = EMBER_FRAMES[1],
+        backgroundImage = FIRE_FRAMES[1],
         backgroundFit   = "cover",
         width           = "100%",
         height          = "100%",
@@ -200,20 +201,34 @@ function M.Create(onEnter)
     return startScreen_
 end
 
---- 每帧更新火把帧动画（双层 A/B 交叉淡入淡出）
+--- 每帧更新火把帧动画
+--- 序列: f1→f2→f3→f4（开场），之后 f3↔f4 循环
 ---@param dt number
 function M.Update(dt)
     if not startScreen_ or not M.IsVisible() then return end
     if not bgLayerA_ or not bgLayerB_ then return end
-    if frameFading_ then return end  -- 淡入淡出进行中，等待完成
+    if frameFading_ then return end
 
     frameTimer_ = frameTimer_ + dt
     if frameTimer_ < FRAME_INTERVAL then return end
     frameTimer_ = 0
 
     -- 计算下一帧
-    local nextIdx = frameIndex_ % FRAME_COUNT + 1
-    local nextImage = EMBER_FRAMES[nextIdx]
+    local nextIdx
+    if not introPlayed_ then
+        -- 开场阶段: 1→2→3→4 顺序播放
+        nextIdx = frameIndex_ + 1
+        if nextIdx > 4 then
+            -- 开场播完，进入循环
+            introPlayed_ = true
+            nextIdx = 3   -- 回到 f3 开始循环
+        end
+    else
+        -- 循环阶段: f3↔f4
+        nextIdx = (frameIndex_ == 3) and 4 or 3
+    end
+
+    local nextImage = FIRE_FRAMES[nextIdx]
 
     -- B 层设置下一帧图片并淡入
     bgLayerB_:SetStyle({ backgroundImage = nextImage })
@@ -221,7 +236,7 @@ function M.Update(dt)
     bgLayerB_:Animate({
         keyframes = {
             [0] = { opacity = 0 },
-            [1] = { opacity = EMBER_OPACITY },
+            [1] = { opacity = 1.0 },
         },
         duration = FRAME_FADE,
         easing   = "easeInOut",
