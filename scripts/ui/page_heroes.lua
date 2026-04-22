@@ -133,7 +133,7 @@ local function createHeroCard(heroId, heroState)
             Comp.HeroAvatar({
                 heroId    = heroId,
                 size      = S.heroAvatarSm,
-                quality   = db.quality,
+                quality   = db.quality + 1,
                 level     = owned and level or nil,
                 showLevel = owned,
             }),
@@ -300,7 +300,7 @@ local function buildDetailPanel(heroId, heroState)
                 Comp.HeroAvatar({
                     heroId  = heroId,
                     size    = S.heroAvatarLg,
-                    quality = db.quality,
+                    quality = db.quality + 1,
                 }),
                 UI.Panel {
                     flexDirection  = "column",

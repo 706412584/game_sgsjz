@@ -155,7 +155,7 @@ local function renderSlotContent(panel, heroId, label)
         local qc = Theme.QualityColor(hd and (hd.quality + 1) or 1)
         panel:AddChild(Comp.HeroAvatar({
             heroId = heroId, size = 52,
-            quality = hd and hd.quality or 1,
+            quality = hd and (hd.quality + 1) or 1,
             level = st and st.level or 1, showLevel = true,
         }))
         panel:AddChild(UI.Label {
@@ -286,7 +286,7 @@ function refreshHeroList()  ---@diagnostic disable-line: lowercase-global
                 maybeDragHero_ = nil
             end,
             children = {
-                Comp.HeroAvatar({ heroId = hero.id, size = 44, quality = hero.data.quality }),
+                Comp.HeroAvatar({ heroId = hero.id, size = 44, quality = hero.data.quality + 1 }),
                 UI.Panel {
                     flexGrow = 1, flexShrink = 1, flexDirection = "column", gap = 2,
                     children = {

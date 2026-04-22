@@ -71,7 +71,7 @@ local function createHeroCard(heroId, heroState)
             Comp.HeroAvatar({
                 heroId    = heroId,
                 size      = S.heroAvatarSm,
-                quality   = db.quality,
+                quality   = db.quality + 1,
                 level     = heroState.level,
                 showLevel = true,
             }),
@@ -577,7 +577,7 @@ local function buildDetailContent()
             children = {
                 Comp.HeroAvatar({
                     heroId = selectedHeroId_, size = S.heroAvatarMd,
-                    quality = db.quality, level = hero.level, showLevel = true,
+                    quality = db.quality + 1, level = hero.level, showLevel = true,
                 }),
                 UI.Panel {
                     flexDirection = "column", gap = 2,
