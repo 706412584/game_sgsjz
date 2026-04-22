@@ -11,23 +11,8 @@ local onEnterCallback_ = nil
 local enterBtn_        = nil
 local enterEnabled_    = false
 
--- 火球动画参数（从右上飞向左下）
-local FIREBALL_IMG = "image/fireball_ink_20260422125819.png"
-local FB_W, FB_H   = 260, 170          -- 火球贴图显示尺寸
-local FB_SPEED      = 110              -- 像素/秒
-local FB_ANGLE      = math.rad(225)    -- 飞行方向：左下 (225°)
-local FB_VX         = FB_SPEED * math.cos(FB_ANGLE)
-local FB_VY         = -FB_SPEED * math.sin(FB_ANGLE) -- UI 坐标 Y 向下
-
--- 两颗火球，错开时间，增加动感
-local fireballs_ = {}
-
---- 初始化火球起始位置（屏幕右上外侧）
-local function resetFireball(fb, screenW, screenH, offsetPct)
-    -- 从右上角外侧不同位置出发
-    fb.x = screenW * (0.75 + offsetPct * 0.3) + FB_W
-    fb.y = -(FB_H + offsetPct * screenH * 0.15)
-end
+-- 背景图
+local BG_IMAGE = "image/start_fire_f3_20260422063332.png"
 
 --- 创建开始界面覆盖层
 ---@param onEnter fun()
@@ -35,13 +20,6 @@ end
 function M.Create(onEnter)
     onEnterCallback_ = onEnter
     enterEnabled_ = false
-    fireballs_    = {}
-
-    local physW = graphics:GetWidth()
-    local physH = graphics:GetHeight()
-    local dpr   = graphics:GetDPR()
-    local screenW = physW / dpr
-    local screenH = physH / dpr
 
     startScreen_ = UI.Panel {
         id            = "start_screen",
@@ -58,7 +36,7 @@ function M.Create(onEnter)
 
     -- 1) 静态背景图
     startScreen_:AddChild(UI.Panel {
-        backgroundImage = "image/start_fire_f4_20260422063329.png",
+        backgroundImage = BG_IMAGE,
         backgroundFit   = "cover",
         width           = "100%",
         height          = "100%",
@@ -66,30 +44,7 @@ function M.Create(onEnter)
         top = 0, left = 0,
     })
 
-    -- 2) 火球动画层（两颗火球错开飞行）
-    for i = 1, 2 do
-        local fbPanel = UI.Panel {
-            width           = FB_W,
-            height          = FB_H,
-            position        = "absolute",
-            top = -FB_H, left = 0,
-            pointerEvents   = "none",
-            backgroundImage = FIREBALL_IMG,
-            backgroundFit   = "contain",
-            opacity         = (i == 1) and 0.9 or 0.6,
-        }
-        startScreen_:AddChild(fbPanel)
-        local fb = { panel = fbPanel, x = 0, y = 0, scale = (i == 1) and 1.0 or 0.7 }
-        resetFireball(fb, screenW, screenH, (i - 1) * 0.5)
-        -- 第二颗初始偏移一段距离，模拟已在飞行中
-        if i == 2 then
-            fb.x = fb.x + FB_VX * 1.8
-            fb.y = fb.y + FB_VY * 1.8
-        end
-        fireballs_[i] = fb
-    end
-
-    -- 3) 底部火光渐变（暖橙色，模拟篝火映照）
+    -- 2) 底部火光渐变（暖橙色，模拟篝火映照）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
         height   = "35%",
@@ -106,7 +61,7 @@ function M.Create(onEnter)
         },
     })
 
-    -- 4) 底部深色遮罩（让按钮文字可读）
+    -- 3) 底部深色遮罩（让按钮文字可读）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
         height   = "25%",
@@ -217,36 +172,9 @@ function M.Create(onEnter)
     return startScreen_
 end
 
---- 每帧更新 — 驱动火球飞行动画
+--- 每帧更新（静态背景，无需动画）
 ---@param dt number
 function M.Update(dt)
-    if #fireballs_ == 0 then return end
-
-    local physW = graphics:GetWidth()
-    local physH = graphics:GetHeight()
-    local dpr   = graphics:GetDPR()
-    local screenW = physW / dpr
-    local screenH = physH / dpr
-
-    for i, fb in ipairs(fireballs_) do
-        fb.x = fb.x + FB_VX * dt
-        fb.y = fb.y + FB_VY * dt
-
-        -- 飞出屏幕左下角后重置到右上角
-        local w = FB_W * fb.scale
-        local h = FB_H * fb.scale
-        if fb.x < -w or fb.y > screenH + h then
-            resetFireball(fb, screenW, screenH, (i - 1) * 0.5)
-        end
-
-        -- 更新面板位置
-        fb.panel:SetStyle({
-            left   = math.floor(fb.x),
-            top    = math.floor(fb.y),
-            width  = math.floor(w),
-            height = math.floor(h),
-        })
-    end
 end
 
 -- 公开 API
