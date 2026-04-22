@@ -50,6 +50,14 @@ local BUILDINGS = {
         pctY  = 0.03,
     },
     {
+        id    = "treasure",
+        name  = "宝物阁",
+        desc  = "收集宝物，增强武将",
+        image = "Textures/buildings/building_treasure.png",
+        pctX  = 0.30,
+        pctY  = 0.50,
+    },
+    {
         id    = "arena",
         name  = "演武场",
         desc  = "切磋比武，竞技排名",

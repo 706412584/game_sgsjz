@@ -115,6 +115,8 @@ local userId = tonumber(identityUid:GetInt64())
 | `network/shared.lua` | 引用 | 引用 |
 | `data/data_heroes.lua` | 引用 | 引用 |
 | `data/data_maps.lua` | 引用 | 引用 |
+| `data/data_treasure.lua` | 引用 | 引用 |
+| `data/treasure_state.lua` | 引用 | 引用 |
 | `data/battle_engine.lua` | **禁用** | 引用 |
 | `data/data_state.lua` | 只读 | 读写 |
 | `ui/*` | 引用 | **禁用** |
@@ -352,6 +354,11 @@ connection:SendRemoteEvent(Shared.EVENTS.GAME_ACTION, true, data)
 | `equip_enhance` | `{heroId, slot}` | 强化装备 |
 | `equip_refine` | `{heroId, slot}` | 精炼装备 |
 | `equip_reforge` | `{heroId, slot, lockIndexes}` | 洗练装备 |
+| `treasure_equip` | `{heroId, bagIndex, slot}` | 装备宝物 |
+| `treasure_remove` | `{heroId, slot}` | 卸下宝物 |
+| `treasure_upgrade` | `{heroId, slot}` | 升级公共宝物 |
+| `treasure_compose` | `{templateId}` | 合成公共宝物 |
+| `treasure_compose_exclusive` | `{heroId}` | 合成专属宝物 |
 
 **新增 Action 时必须更新本清单。**
 
@@ -404,6 +411,8 @@ scripts/
 │   ├── data_state.lua        # 状态管理（服务端写/客户端读）
 │   ├── data_heroes.lua       # 英雄数据库（两端共享）
 │   ├── data_maps.lua         # 地图数据库（两端共享）
+│   ├── data_treasure.lua     # 宝物数据库（两端共享）
+│   ├── treasure_state.lua    # 宝物状态操作（两端共享）
 │   └── battle_engine.lua     # 战斗引擎（仅服务端）
 └── ui/
     ├── theme.lua             # 主题
@@ -415,6 +424,7 @@ scripts/
     ├── page_battle.lua       # 战斗回放
     ├── page_heroes.lua       # 英雄养成
     ├── page_formation.lua    # 阵容编辑
+    ├── page_treasure.lua     # 宝物系统
     ├── page_start.lua        # 开始界面
     └── page_server.lua       # 区服选择
 ```

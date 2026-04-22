@@ -7,6 +7,7 @@
 local DH = require("data.data_heroes")
 local DM = require("data.data_maps")
 local DF = require("data.data_formation")
+local TS = require("data.treasure_state")
 
 local M = {}
 
@@ -1179,6 +1180,19 @@ function M.BuildAllyTeam(gameState)
         -- 暴击/闪避存储到单元上供战斗时使用
         u.formationCrit  = buffs.crit or 0
         u.formationDodge = buffs.dodge or 0
+    end
+
+    -- 应用宝物属性加成
+    for _, u in ipairs(units) do
+        if u.heroId then
+            local heroState = gameState.heroes[u.heroId]
+            if heroState then
+                local tAttrs = TS.CalcAllTreasureAttrs(heroState)
+                if tAttrs.tong then u.tong = u.tong + tAttrs.tong end
+                if tAttrs.yong then u.yong = u.yong + tAttrs.yong end
+                if tAttrs.zhi  then u.zhi  = u.zhi  + tAttrs.zhi  end
+            end
+        end
     end
 
     return units

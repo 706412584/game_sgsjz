@@ -13,7 +13,9 @@ local FormationPage = require("ui.page_formation")
 local RecruitPage   = require("ui.page_recruit")
 local ShopPage      = require("ui.page_shop")
 local EquipPage     = require("ui.page_equip")
+local TreasurePage  = require("ui.page_treasure")
 local ShopData      = require("data.data_shop")
+local TS            = require("data.treasure_state")
 local Modal         = require("ui.modal_manager")
 local StartPage     = require("ui.page_start")
 local DebugLog      = require("ui.debug_log")
@@ -87,6 +89,8 @@ local function switchPage(pageId)
                     switchPage("equip")
                 elseif buildingId == "recruit" then
                     switchPage("recruit")
+                elseif buildingId == "treasure" then
+                    switchPage("treasure")
                 elseif buildingId == "arena" then
                     Modal.Alert("演武场", "竞技系统开发中，敬请期待！")
                 elseif buildingId == "shop" then
@@ -271,6 +275,36 @@ local function switchPage(pageId)
                         Modal.Alert("提示", msg or "操作失败")
                     end
                     EquipPage.Refresh(gs())
+                    HUD.Update(gs())
+                end
+            end,
+        }))
+
+    elseif pageId == "treasure" then
+        contentContainer_:AddChild(TreasurePage.Create(gs(), {
+            sendAction = function(action, params)
+                if isNetworkMode_ then
+                    ClientNet.SendAction(action, params)
+                else
+                    -- 单机模式: 本地处理
+                    local ok, msg
+                    if action == "treasure_equip" then
+                        ok, msg = TS.Equip(gs(), params.heroId, params.bagIndex, params.slot)
+                    elseif action == "treasure_remove" then
+                        ok, msg = TS.Remove(gs(), params.heroId, params.slot)
+                    elseif action == "treasure_upgrade" then
+                        ok, msg = TS.UpgradePublic(gs(), params.heroId, params.slot)
+                    elseif action == "treasure_compose" then
+                        ok, msg = TS.ComposePublic(gs(), params.templateId)
+                    elseif action == "treasure_compose_exclusive" then
+                        ok, msg = TS.ComposeExclusive(gs(), params.heroId)
+                    end
+                    if ok then
+                        State.RecalcPower(gs())
+                    else
+                        Modal.Alert("提示", msg or "操作失败")
+                    end
+                    TreasurePage.Refresh(gs())
                     HUD.Update(gs())
                 end
             end,
@@ -526,6 +560,8 @@ function Start()
             EquipPage.Refresh(gs())
         elseif currentPage_ == "formation" then
             FormationPage.Refresh(gs())
+        elseif currentPage_ == "treasure" then
+            TreasurePage.Refresh(gs())
         end
     end
 

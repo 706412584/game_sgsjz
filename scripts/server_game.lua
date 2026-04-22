@@ -11,6 +11,7 @@ local Battle  = require("data.battle_engine")
 local Shop    = require("data.data_shop")
 local DE      = require("data.data_equip")
 local DF      = require("data.data_formation")
+local TS      = require("data.treasure_state")
 local Shared  = require("network.shared")
 local EVENTS  = Shared.EVENTS
 
@@ -379,6 +380,15 @@ ACTION_HANDLERS["battle"] = function(userId, params)
                 type  = "equip",
             }
         end
+        -- 宝物材料掉落
+        local tDrops = TS.TryDropMaterials(state, nodeType)
+        for _, td in ipairs(tDrops) do
+            rewards.items[#rewards.items + 1] = {
+                name  = td.name,
+                count = td.count,
+                type  = "treasure_material",
+            }
+        end
     end
 
     dirty_[userId] = true
@@ -707,6 +717,118 @@ ACTION_HANDLERS["equip_reforge"] = function(userId, params)
     dirty_[userId] = true
     sendEvt(userId, "action_result", {
         action  = "equip_reforge",
+        success = ok,
+        msg     = msg,
+    })
+    sendSync(userId)
+end
+
+------------------------------------------------------------
+-- 宝物系统 Action
+------------------------------------------------------------
+
+--- treasure_equip: 穿戴公共宝物
+ACTION_HANDLERS["treasure_equip"] = function(userId, params)
+    local state = players_[userId]
+    local heroId   = params.heroId
+    local bagIndex = params.bagIndex
+    local slot     = params.slot
+    if not heroId or not bagIndex or not slot then
+        sendEvt(userId, "error", { msg = "缺少参数" })
+        return
+    end
+    local ok, msg = TS.Equip(state, heroId, bagIndex, slot)
+    if ok then State.RecalcPower(state) end
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "treasure_equip",
+        success = ok,
+        msg     = msg,
+    })
+    sendSync(userId)
+end
+
+--- treasure_remove: 卸下公共宝物
+ACTION_HANDLERS["treasure_remove"] = function(userId, params)
+    local state = players_[userId]
+    local heroId = params.heroId
+    local slot   = params.slot
+    if not heroId or not slot then
+        sendEvt(userId, "error", { msg = "缺少参数" })
+        return
+    end
+    local ok, msg = TS.Remove(state, heroId, slot)
+    if ok then State.RecalcPower(state) end
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "treasure_remove",
+        success = ok,
+        msg     = msg,
+    })
+    sendSync(userId)
+end
+
+--- treasure_upgrade: 升级宝物
+ACTION_HANDLERS["treasure_upgrade"] = function(userId, params)
+    local state = players_[userId]
+    local heroId     = params.heroId
+    local slot       = params.slot
+    local isExclusive = params.isExclusive or false
+    if not heroId then
+        sendEvt(userId, "error", { msg = "缺少参数" })
+        return
+    end
+    local ok, msg
+    if isExclusive then
+        ok, msg = TS.UpgradeExclusive(state, heroId)
+    else
+        if not slot then
+            sendEvt(userId, "error", { msg = "缺少槽位" })
+            return
+        end
+        ok, msg = TS.UpgradePublic(state, heroId, slot)
+    end
+    if ok then State.RecalcPower(state) end
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "treasure_upgrade",
+        success = ok,
+        msg     = msg,
+    })
+    sendSync(userId)
+end
+
+--- treasure_compose: 合成公共宝物
+ACTION_HANDLERS["treasure_compose"] = function(userId, params)
+    local state = players_[userId]
+    local templateId = params.templateId
+    if not templateId then
+        sendEvt(userId, "error", { msg = "缺少模板ID" })
+        return
+    end
+    local ok, msg = TS.ComposePublic(state, templateId)
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "treasure_compose",
+        success = ok,
+        msg     = msg,
+    })
+    sendSync(userId)
+end
+
+--- treasure_compose_exclusive: 合成专属宝物
+ACTION_HANDLERS["treasure_compose_exclusive"] = function(userId, params)
+    local state = players_[userId]
+    local heroId = params.heroId
+    if not heroId then
+        sendEvt(userId, "error", { msg = "缺少英雄ID" })
+        return
+    end
+    local ok, msg = TS.ComposeExclusive(state, heroId)
+    if ok then State.RecalcPower(state) end
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "treasure_compose_exclusive",
         success = ok,
         msg     = msg,
     })

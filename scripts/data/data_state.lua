@@ -6,6 +6,7 @@
 local DH = require("data.data_heroes")
 local DM = require("data.data_maps")
 local DE = require("data.data_equip")
+local TS = require("data.treasure_state")
 
 local M = {}
 
@@ -630,7 +631,10 @@ function M.CalcHeroPower(heroId, heroState)
         equipPower = equipPower + #bonuses * 80
     end
 
-    return base + levelBonus + starBonus + math.floor(equipPower)
+    -- 宝物属性加成
+    local treasurePower = TS.CalcTreasurePower(heroState)
+
+    return base + levelBonus + starBonus + math.floor(equipPower) + treasurePower
 end
 
 --- 重新计算总战力
@@ -690,12 +694,19 @@ local function patchState(s)
     s.lineup = s.lineup or { formation = "feng_shi", front = {}, back = {} }
     s.inventory.reforge_stone = s.inventory.reforge_stone or 0
     s.equipBag = s.equipBag or {}
+    -- 宝物系统兼容
+    s.treasureBag = s.treasureBag or {}
+    s.inventory.treasure_essence = s.inventory.treasure_essence or 0
+    s.inventory.treasure_shards = s.inventory.treasure_shards or 0
+    s.inventory.exclusive_shards = s.inventory.exclusive_shards or 0
     -- heroes 字段补丁
     for _, h in pairs(s.heroes or {}) do
         if h.star == nil then h.star = 1 end
         if h.fragments == nil then h.fragments = 0 end
         -- 装备槽位兼容
         if h.equips == nil then h.equips = {} end
+        -- 宝物槽位兼容
+        if h.treasures == nil then h.treasures = {} end
     end
 end
 
