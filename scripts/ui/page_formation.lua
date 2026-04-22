@@ -28,6 +28,7 @@ local formationBtnLabel_, formationDescLabel_, formationListPanel_
 local dragCtx_
 local dragStartX_, dragStartY_ = 0, 0
 local maybeDragHero_ = nil  -- { heroId, widget }
+local cachedCtxLayout_ = nil  -- 拖拽期间缓存 context 绝对坐标(避免每帧重算)
 
 -- 英雄列表缓存: heroRows_[heroId] = { row=Panel, inLineup=bool }
 local heroRows_ = {}
@@ -90,9 +91,24 @@ end
 -- 拖放系统
 ------------------------------------------------------------
 
+--- 快速更新拖拽图标位置(绕过 SetStyle, 直接 Yoga API)
+local DRAG_ICON_HALF = 26  -- 52 / 2
+local function fastUpdateDragPos(x, y)
+    if not dragCtx_ or not dragCtx_.isDragging_ then return end
+    dragCtx_.cursorX_ = x
+    dragCtx_.cursorY_ = y
+    if not cachedCtxLayout_ then
+        cachedCtxLayout_ = dragCtx_:GetAbsoluteLayout()
+    end
+    local iconNode = dragCtx_.dragIcon_.node
+    YGNodeStyleSetPosition(iconNode, YGEdgeLeft, (x - cachedCtxLayout_.x) - DRAG_ICON_HALF)
+    YGNodeStyleSetPosition(iconNode, YGEdgeTop,  (y - cachedCtxLayout_.y) - DRAG_ICON_HALF)
+end
+
 --- 启动拖拽并设置武将头像为拖拽图标
 local function startHeroDrag(itemData, widget, heroId, x, y)
     if not dragCtx_ then return end
+    cachedCtxLayout_ = nil  -- 重置缓存,首次 move 时重算
     dragCtx_:StartDrag(itemData, widget, "", x, y)
     local hd = DH.Get(heroId)
     local qc = Theme.HeroQualityColor(hd and hd.quality or 0)
@@ -259,14 +275,14 @@ local function createHeroRow(heroId)
             if maybeDragHero_ and dragCtx_ and not dragCtx_:IsDragging() then
                 local dx = event.x - dragStartX_
                 local dy = event.y - dragStartY_
-                if dx * dx + dy * dy > 64 then
+                if dx * dx + dy * dy > 16 then -- 4px 阈值
                     startHeroDrag(
                         { heroId = maybeDragHero_.heroId, _srcType = "list" },
                         heroRow, maybeDragHero_.heroId, event.x, event.y)
                     maybeDragHero_ = nil
                 end
             elseif dragCtx_ and dragCtx_:IsDragging() then
-                dragCtx_:UpdateDragPosition(event.x, event.y)
+                fastUpdateDragPos(event.x, event.y)
             end
         end,
         onPointerUp = function(event)
@@ -461,7 +477,7 @@ function M.Create(gameState, callbacks)
             end,
             onPointerMove = function(event)
                 if dragCtx_ and dragCtx_:IsDragging() then
-                    dragCtx_:UpdateDragPosition(event.x, event.y)
+                    fastUpdateDragPos(event.x, event.y)
                 end
             end,
             onPointerUp = function(event)
