@@ -14,7 +14,7 @@ local enterBtn_        = nil
 local enterEnabled_    = false
 
 -- 背景视频路径
-local BG_VIDEO = "video/cgt-20260422145730-c7dvw_video.mp4"
+local BG_VIDEO = "video/cgt-20260422195103-w2kss_video.mp4"
 
 --- 创建开始界面覆盖层
 ---@param onEnter fun()
