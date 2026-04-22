@@ -107,14 +107,16 @@ local function fastUpdateDragPos(x, y)
     YGNodeStyleSetPosition(iconNode, YGEdgeTop,  (y - cachedCtxLayout_.y) - DRAG_ICON_HALF)
 end
 
---- 将 widget 局部坐标转换为屏幕坐标(base pixels)
----@param widget table UI widget
----@param localX number widget 局部 x
----@param localY number widget 局部 y
----@return number screenX, number screenY
-local function localToScreen(widget, localX, localY)
-    local l = widget:GetAbsoluteLayout()
-    return l.x + localX, l.y + localY
+--- 直接读取指针当前屏幕坐标(base pixels), 兼容鼠标+触摸
+--- 不依赖 widget-local 坐标逆算(逆算无法处理 ScrollView 偏移)
+---@return number baseX, number baseY
+local function getPointerBasePos()
+    local scale = UI.GetScale()
+    if input:GetNumTouches() > 0 then
+        local touch = input:GetTouch(0)
+        return touch.position.x / scale, touch.position.y / scale
+    end
+    return input.mousePosition.x / scale, input.mousePosition.y / scale
 end
 
 --- 停止拖拽状态(清理)
@@ -132,10 +134,8 @@ end
 
 --- 指针移动处理: 拖拽阈值检测 + 拖拽位置更新
 --- 由 heroRow/slot 的 onPointerMove 调用
----@param widget table 发出事件的 widget
----@param event table PointerEvent (局部坐标)
-local function handleDragPointerMove(widget, event)
-    local sx, sy = localToScreen(widget, event.x, event.y)
+local function handleDragPointerMove()
+    local sx, sy = getPointerBasePos()
 
     -- 阶段1: 预拖拽, 检测拖动阈值
     if maybeDragHero_ and dragCtx_ and not dragCtx_:IsDragging() then
@@ -160,10 +160,8 @@ end
 
 --- 指针释放处理: 结束拖拽 + 放置到目标
 --- 由 heroRow/slot 的 onPointerUp 调用
----@param widget table 发出事件的 widget
----@param event table PointerEvent (局部坐标)
-local function handleDragPointerUp(widget, event)
-    local sx, sy = localToScreen(widget, event.x, event.y)
+local function handleDragPointerUp()
+    local sx, sy = getPointerBasePos()
 
     -- 正在拖拽: 执行放置
     if dragCtx_ and dragCtx_:IsDragging() then
@@ -355,20 +353,19 @@ local function createHeroRow(heroId)
             else Modal.Alert("提示", "阵容已满(前排2+后排3)") end
         end,
         onPointerDown = function(event, self)
-            local sx, sy = localToScreen(self, event.x, event.y)
-            print(string.format("[FMT] onPointerDown heroRow %s sx=%.0f sy=%.0f", heroId, sx, sy))
             if isInLineup(heroId) then return end
+            local sx, sy = getPointerBasePos()
             dragStartX_ = sx
             dragStartY_ = sy
             maybeDragHero_ = { heroId = heroId }
         end,
         onPointerMove = function(event, self)
             if maybeDragHero_ or (dragCtx_ and dragCtx_:IsDragging()) then
-                handleDragPointerMove(self, event)
+                handleDragPointerMove()
             end
         end,
         onPointerUp = function(event, self)
-            handleDragPointerUp(self, event)
+            handleDragPointerUp()
         end,
         children = {
             Comp.HeroAvatar({ heroId = heroId, size = 44, quality = hero.data.quality, pointerEvents = "none" }),
@@ -548,10 +545,9 @@ function M.Create(gameState, callbacks)
             width = 72, alignItems = "center", gap = 2, paddingVertical = 4,
             onClick = function() onSlotClick(row, i) end,
             onPointerDown = function(event, self)
-                local sx, sy = localToScreen(self, event.x, event.y)
-                print(string.format("[FMT] onPointerDown slot %s[%d] sx=%.0f sy=%.0f hero=%s", row, i, sx, sy, tostring((row == "front" and editFront_ or editBack_)[i])))
                 local arr = row == "front" and editFront_ or editBack_
                 if arr[i] and dragCtx_ then
+                    local sx, sy = getPointerBasePos()
                     startHeroDrag(
                         { heroId = arr[i], _srcType = "slot", _slotInfo = { row = row, idx = i } },
                         self, arr[i], sx, sy)
@@ -559,11 +555,11 @@ function M.Create(gameState, callbacks)
             end,
             onPointerMove = function(event, self)
                 if dragCtx_ and dragCtx_:IsDragging() then
-                    handleDragPointerMove(self, event)
+                    handleDragPointerMove()
                 end
             end,
             onPointerUp = function(event, self)
-                handleDragPointerUp(self, event)
+                handleDragPointerUp()
             end,
             onPointerEnter = function(event, self)
                 if dragCtx_ and dragCtx_:IsDragging() then
