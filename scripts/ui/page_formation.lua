@@ -27,6 +27,8 @@ local formationBtnLabel_, formationDescLabel_, formationListPanel_
 -- 拖放状态
 local dragCtx_
 local dragStartX_, dragStartY_ = 0, 0
+local dragStartTime_ = 0       -- 按下时刻(秒), 长按 >= 1.5s 才允许拖拽
+local LONG_PRESS_SEC = 1.5
 local maybeDragHero_ = nil  -- { heroId = string }
 local cachedCtxLayout_ = nil  -- 拖拽期间缓存 context 绝对坐标(避免每帧重算)
 local dragEndFrame_ = -1        -- 拖拽结束帧号(防止同帧 onClick 双重触发)
@@ -137,16 +139,23 @@ end
 local function handleDragPointerMove()
     local sx, sy = getPointerBasePos()
 
-    -- 阶段1: 预拖拽, 检测拖动阈值
+    -- 阶段1: 预拖拽, 长按 1.5s + 移动阈值
     if maybeDragHero_ and dragCtx_ and not dragCtx_:IsDragging() then
+        local held = time.elapsedTime - dragStartTime_
+        if held < LONG_PRESS_SEC then return end  -- 未达长按时间, 忽略移动
         local dx = sx - dragStartX_
         local dy = sy - dragStartY_
         if dx * dx + dy * dy > 16 then -- 4px 阈值
+            local srcType = maybeDragHero_._srcType or "list"
+            local itemData
+            if srcType == "slot" then
+                itemData = { heroId = maybeDragHero_.heroId, _srcType = "slot", _slotInfo = maybeDragHero_._slotInfo }
+            else
+                itemData = { heroId = maybeDragHero_.heroId, _srcType = "list" }
+            end
             local cache = heroRows_[maybeDragHero_.heroId]
             local srcWidget = cache and cache.row
-            startHeroDrag(
-                { heroId = maybeDragHero_.heroId, _srcType = "list" },
-                srcWidget, maybeDragHero_.heroId, sx, sy)
+            startHeroDrag(itemData, srcWidget, maybeDragHero_.heroId, sx, sy)
             maybeDragHero_ = nil
         end
         return
@@ -357,6 +366,7 @@ local function createHeroRow(heroId)
             local sx, sy = getPointerBasePos()
             dragStartX_ = sx
             dragStartY_ = sy
+            dragStartTime_ = time.elapsedTime
             maybeDragHero_ = { heroId = heroId }
         end,
         onPointerMove = function(event, self)
@@ -548,13 +558,14 @@ function M.Create(gameState, callbacks)
                 local arr = row == "front" and editFront_ or editBack_
                 if arr[i] and dragCtx_ then
                     local sx, sy = getPointerBasePos()
-                    startHeroDrag(
-                        { heroId = arr[i], _srcType = "slot", _slotInfo = { row = row, idx = i } },
-                        self, arr[i], sx, sy)
+                    dragStartX_ = sx
+                    dragStartY_ = sy
+                    dragStartTime_ = time.elapsedTime
+                    maybeDragHero_ = { heroId = arr[i], _srcType = "slot", _slotInfo = { row = row, idx = i } }
                 end
             end,
             onPointerMove = function(event, self)
-                if dragCtx_ and dragCtx_:IsDragging() then
+                if maybeDragHero_ or (dragCtx_ and dragCtx_:IsDragging()) then
                     handleDragPointerMove()
                 end
             end,
