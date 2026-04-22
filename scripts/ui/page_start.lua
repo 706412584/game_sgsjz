@@ -1,6 +1,7 @@
 -- ui/page_start.lua — 三国神将录 开始界面 (zIndex=900)
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
+local DBG   = require("ui.debug_log")
 local C     = Theme.colors
 
 local M = {}
@@ -93,8 +94,8 @@ function M.Create(onEnter)
     }
     startScreen_:AddChild(bgLayerA_)
     startScreen_:AddChild(bgLayerB_)
-    print("[StartPage] Create: bgLayerA_=" .. tostring(bgLayerA_) .. " bgLayerB_=" .. tostring(bgLayerB_))
-    print("[StartPage] Create: FRAME_COUNT=" .. FRAME_COUNT .. " INTERVAL=" .. FRAME_INTERVAL .. " FADE=" .. FRAME_FADE)
+    DBG.Log("[StartPage] Create: A=" .. tostring(bgLayerA_) .. " B=" .. tostring(bgLayerB_))
+    DBG.Log("[StartPage] Create: frames=" .. FRAME_COUNT .. " interval=" .. FRAME_INTERVAL .. " fade=" .. FRAME_FADE)
 
     -- 4) 底部火光渐变（暖橙色，模拟篝火映照）
     startScreen_:AddChild(UI.Panel {
@@ -229,12 +230,11 @@ function M.Update(dt)
     updateLogTimer_ = updateLogTimer_ + dt
     if updateLogTimer_ >= 2.0 then
         updateLogTimer_ = 0
-        print("[StartPage] Update: screen=" .. tostring(startScreen_ ~= nil)
-            .. " visible=" .. tostring(M.IsVisible())
-            .. " layerA=" .. tostring(bgLayerA_ ~= nil)
-            .. " layerB=" .. tostring(bgLayerB_ ~= nil)
+        DBG.Log("[StartPage] Update: vis=" .. tostring(M.IsVisible())
+            .. " A=" .. tostring(bgLayerA_ ~= nil)
+            .. " B=" .. tostring(bgLayerB_ ~= nil)
             .. " fading=" .. tostring(frameFading_)
-            .. " timer=" .. string.format("%.2f", frameTimer_)
+            .. " t=" .. string.format("%.2f", frameTimer_)
             .. " idx=" .. tostring(frameIndex_))
     end
 
@@ -249,7 +249,7 @@ function M.Update(dt)
     -- 计算下一帧
     local nextIdx = frameIndex_ % FRAME_COUNT + 1
     local nextImage = EMBER_FRAMES[nextIdx]
-    print("[StartPage] FrameSwitch: " .. frameIndex_ .. " -> " .. nextIdx .. " img=" .. nextImage)
+    DBG.Log("[StartPage] Switch: " .. frameIndex_ .. "->" .. nextIdx .. " " .. nextImage)
 
     -- B 层设置下一帧图片并淡入
     bgLayerB_:SetStyle({ backgroundImage = nextImage })
@@ -263,7 +263,7 @@ function M.Update(dt)
         easing   = "easeInOut",
         fillMode = "forwards",
         onComplete = function()
-            print("[StartPage] FadeComplete: idx=" .. nextIdx)
+            DBG.Log("[StartPage] FadeOK: idx=" .. nextIdx)
             -- 淡入完成：A 层换成当前帧图（瞬间），B 层归零
             if bgLayerA_ then
                 bgLayerA_:SetStyle({ backgroundImage = nextImage })
