@@ -29,6 +29,7 @@ local dragCtx_
 local dragStartX_, dragStartY_ = 0, 0
 local maybeDragHero_ = nil  -- { heroId, widget }
 local cachedCtxLayout_ = nil  -- 拖拽期间缓存 context 绝对坐标(避免每帧重算)
+local dragUpdateBound_ = false  -- Update 事件是否已绑定
 
 -- 英雄列表缓存: heroRows_[heroId] = { row=Panel, inLineup=bool }
 local heroRows_ = {}
@@ -37,6 +38,7 @@ local heroOrder_ = {}  -- 排序后的 heroId 列表(创建时确定)
 -- 前置声明(解决循环引用)
 local refreshSlots
 local refreshHeroList
+local startHeroDrag
 
 ------------------------------------------------------------
 -- 辅助
@@ -105,8 +107,60 @@ local function fastUpdateDragPos(x, y)
     YGNodeStyleSetPosition(iconNode, YGEdgeTop,  (y - cachedCtxLayout_.y) - DRAG_ICON_HALF)
 end
 
+--- 停止拖拽追踪(取消 Update 事件订阅)
+local function stopDragTracking()
+    if dragUpdateBound_ then
+        UnsubscribeFromEvent("Update")
+        dragUpdateBound_ = false
+    end
+    maybeDragHero_ = nil
+end
+
+--- 启动每帧拖拽追踪: 订阅 Update 事件, 轮询鼠标位置
+local function startDragTracking()
+    if dragUpdateBound_ then return end
+    dragUpdateBound_ = true
+    SubscribeToEvent("Update", function(eventType, eventData)
+        local mx = input.mousePosition.x
+        local my = input.mousePosition.y
+
+        -- 阶段1: 未正式拖拽,检测拖动阈值
+        if maybeDragHero_ and dragCtx_ and not dragCtx_:IsDragging() then
+            -- 鼠标已松开但未达到拖拽阈值 → 取消预拖拽
+            if not input:GetMouseButtonDown(MOUSEB_LEFT) then
+                stopDragTracking()
+                return
+            end
+            local dx = mx - dragStartX_
+            local dy = my - dragStartY_
+            if dx * dx + dy * dy > 16 then -- 4px 阈值
+                local cache = heroRows_[maybeDragHero_.heroId]
+                local widget = cache and cache.row
+                startHeroDrag(
+                    { heroId = maybeDragHero_.heroId, _srcType = "list" },
+                    widget, maybeDragHero_.heroId, mx, my)
+                maybeDragHero_ = nil
+            end
+        end
+
+        -- 阶段2: 正在拖拽,更新位置
+        if dragCtx_ and dragCtx_:IsDragging() then
+            fastUpdateDragPos(mx, my)
+            -- 检测鼠标释放
+            if not input:GetMouseButtonDown(MOUSEB_LEFT) then
+                local target = dragCtx_:FindDropTargetAt(mx, my)
+                dragCtx_:EndDrag(target)
+                stopDragTracking()
+            end
+        elseif not maybeDragHero_ then
+            -- 既不在预拖拽也不在拖拽中,停止追踪
+            stopDragTracking()
+        end
+    end)
+end
+
 --- 启动拖拽并设置武将头像为拖拽图标
-local function startHeroDrag(itemData, widget, heroId, x, y)
+startHeroDrag = function(itemData, widget, heroId, x, y)
     if not dragCtx_ then return end
     cachedCtxLayout_ = nil  -- 重置缓存,首次 move 时重算
     dragCtx_:StartDrag(itemData, widget, "", x, y)
@@ -136,6 +190,7 @@ local function initDragDrop()
             return true
         end,
         onDragEnd = function(itemData, sourceSlot, targetSlot, success)
+            stopDragTracking()  -- 兜底: 确保 Update 事件已取消
             -- 槽位拖到空白区域 → 下阵
             if not targetSlot and itemData._srcType == "slot" then
                 local si = itemData._slotInfo
@@ -160,7 +215,7 @@ local function initDragDrop()
             end
             refreshSlots()
         end,
-        onDragCancel = function() refreshSlots() end,
+        onDragCancel = function() stopDragTracking(); refreshSlots() end,
     }
 end
 
@@ -270,27 +325,7 @@ local function createHeroRow(heroId)
             dragStartX_ = event.x
             dragStartY_ = event.y
             maybeDragHero_ = { heroId = heroId }
-        end,
-        onPointerMove = function(event)
-            if maybeDragHero_ and dragCtx_ and not dragCtx_:IsDragging() then
-                local dx = event.x - dragStartX_
-                local dy = event.y - dragStartY_
-                if dx * dx + dy * dy > 16 then -- 4px 阈值
-                    startHeroDrag(
-                        { heroId = maybeDragHero_.heroId, _srcType = "list" },
-                        heroRow, maybeDragHero_.heroId, event.x, event.y)
-                    maybeDragHero_ = nil
-                end
-            elseif dragCtx_ and dragCtx_:IsDragging() then
-                fastUpdateDragPos(event.x, event.y)
-            end
-        end,
-        onPointerUp = function(event)
-            if dragCtx_ and dragCtx_:IsDragging() then
-                local target = dragCtx_:FindDropTargetAt(event.x, event.y)
-                dragCtx_:EndDrag(target)
-            end
-            maybeDragHero_ = nil
+            startDragTracking()  -- 启动 Update 轮询,消除间隙死区
         end,
         children = {
             Comp.HeroAvatar({ heroId = heroId, size = 44, quality = hero.data.quality }),
@@ -473,17 +508,7 @@ function M.Create(gameState, callbacks)
                     startHeroDrag(
                         { heroId = arr[i], _srcType = "slot", _slotInfo = { row = row, idx = i } },
                         slot, arr[i], event.x, event.y)
-                end
-            end,
-            onPointerMove = function(event)
-                if dragCtx_ and dragCtx_:IsDragging() then
-                    fastUpdateDragPos(event.x, event.y)
-                end
-            end,
-            onPointerUp = function(event)
-                if dragCtx_ and dragCtx_:IsDragging() then
-                    local target = dragCtx_:FindDropTargetAt(event.x, event.y)
-                    dragCtx_:EndDrag(target)
+                    startDragTracking()  -- 启动 Update 轮询
                 end
             end,
             onPointerEnter = function(event, self)
