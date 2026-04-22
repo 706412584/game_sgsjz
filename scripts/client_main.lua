@@ -12,6 +12,7 @@ local BattlePage    = require("ui.page_battle")
 local FormationPage = require("ui.page_formation")
 local RecruitPage   = require("ui.page_recruit")
 local ShopPage      = require("ui.page_shop")
+local EquipPage     = require("ui.page_equip")
 local ShopData      = require("data.data_shop")
 local Modal         = require("ui.modal_manager")
 local StartPage     = require("ui.page_start")
@@ -83,7 +84,7 @@ local function switchPage(pageId)
                 elseif buildingId == "heroes" then
                     switchPage("heroes")
                 elseif buildingId == "forge" then
-                    Modal.Alert("铁匠铺", "锻造系统开发中，敬请期待！")
+                    switchPage("equip")
                 elseif buildingId == "recruit" then
                     switchPage("recruit")
                 elseif buildingId == "arena" then
@@ -240,6 +241,36 @@ local function switchPage(pageId)
                         Modal.Alert("提示", msg or "购买失败")
                     end
                     ShopPage.Refresh(gs())
+                    HUD.Update(gs())
+                end
+            end,
+        }))
+
+    elseif pageId == "equip" then
+        contentContainer_:AddChild(EquipPage.Create(gs(), {
+            sendAction = function(action, params)
+                if isNetworkMode_ then
+                    ClientNet.SendAction(action, params)
+                else
+                    -- 单机模式: 本地处理
+                    local ok, msg
+                    if action == "equip_wear" then
+                        ok, msg = State.EquipWear(gs(), params.heroId, params.bagIndex)
+                    elseif action == "equip_remove" then
+                        ok, msg = State.EquipRemove(gs(), params.heroId, params.slot)
+                    elseif action == "equip_enhance" then
+                        ok, msg = State.EquipEnhance(gs(), params.heroId, params.slot)
+                    elseif action == "equip_refine" then
+                        ok, msg = State.EquipRefine(gs(), params.heroId, params.slot)
+                    elseif action == "equip_reforge" then
+                        ok, msg = State.EquipReforge(gs(), params.heroId, params.slot, params.lockIndexes)
+                    end
+                    if ok then
+                        State.RecalcPower(gs())
+                    else
+                        Modal.Alert("提示", msg or "操作失败")
+                    end
+                    EquipPage.Refresh(gs())
                     HUD.Update(gs())
                 end
             end,
@@ -491,6 +522,8 @@ function Start()
             RecruitPage.Refresh(gs())
         elseif currentPage_ == "shop" then
             ShopPage.Refresh(gs())
+        elseif currentPage_ == "equip" then
+            EquipPage.Refresh(gs())
         end
     end
 

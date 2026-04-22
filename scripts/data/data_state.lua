@@ -5,6 +5,7 @@
 ------------------------------------------------------------
 local DH = require("data.data_heroes")
 local DM = require("data.data_maps")
+local DE = require("data.data_equip")
 
 local M = {}
 
@@ -86,7 +87,11 @@ function M.CreateDefaultState()
             star_stone    = 0,   -- 升星石
             breakthrough  = 0,   -- 突破丹
             awaken_stone  = 0,   -- 觉醒石
+            reforge_stone = 5,   -- 洗练石
         },
+
+        -- 装备背包 (未穿戴的散件)
+        equipBag = {},  -- { {templateId, level, refineLevel, subAttrs, locked}, ... }
 
         -- 特殊货币
         jianghun   = 0,   -- 将魂
@@ -603,7 +608,29 @@ function M.CalcHeroPower(heroId, heroState)
     local base = (s.tong + s.yong + s.zhi) * 2
     local levelBonus = heroState.level * 15
     local starBonus = (heroState.star or 1) * 50
-    return base + levelBonus + starBonus
+
+    -- 装备属性加成
+    local equipPower = 0
+    if heroState.equips then
+        local equipAttrs, setCount = DE.CalcAllEquipAttrs(heroState.equips)
+        -- 主属性直接加战力
+        equipPower = equipPower + (equipAttrs.tong or 0) * 2
+        equipPower = equipPower + (equipAttrs.yong or 0) * 2
+        equipPower = equipPower + (equipAttrs.zhi or 0) * 2
+        equipPower = equipPower + (equipAttrs.hp or 0) / 10
+        equipPower = equipPower + (equipAttrs.def or 0) * 2
+        -- 百分比属性折算战力
+        equipPower = equipPower + (equipAttrs.atk_pct or 0) * 200
+        equipPower = equipPower + (equipAttrs.def_pct or 0) * 150
+        equipPower = equipPower + (equipAttrs.hp_pct or 0) * 150
+        equipPower = equipPower + (equipAttrs.crit or 0) * 300
+        equipPower = equipPower + (equipAttrs.dodge or 0) * 300
+        -- 套装加成
+        local bonuses = DE.GetActiveSetBonuses(setCount or {})
+        equipPower = equipPower + #bonuses * 80
+    end
+
+    return base + levelBonus + starBonus + math.floor(equipPower)
 end
 
 --- 重新计算总战力
@@ -661,10 +688,14 @@ local function patchState(s)
     s.jianghun = s.jianghun or 0
     s.zhaomuling = s.zhaomuling or 0
     s.lineup = s.lineup or { formation = "feng_shi", front = {}, back = {} }
+    s.inventory.reforge_stone = s.inventory.reforge_stone or 0
+    s.equipBag = s.equipBag or {}
     -- heroes 字段补丁
     for _, h in pairs(s.heroes or {}) do
         if h.star == nil then h.star = 1 end
         if h.fragments == nil then h.fragments = 0 end
+        -- 装备槽位兼容
+        if h.equips == nil then h.equips = {} end
     end
 end
 
@@ -690,6 +721,242 @@ function M.ApplyServerSync(stateTable)
     if M.onStateChanged then
         M.onStateChanged()
     end
+end
+
+------------------------------------------------------------
+-- 装备系统
+------------------------------------------------------------
+
+--- 穿戴装备（从背包到英雄槽位）
+---@param state table
+---@param heroId string
+---@param bagIndex number   背包中的索引(1-based)
+---@return boolean, string
+function M.EquipWear(state, heroId, bagIndex)
+    local hero = state.heroes[heroId]
+    if not hero or hero.level <= 0 then return false, "英雄不存在" end
+    hero.equips = hero.equips or {}
+
+    local bag = state.equipBag or {}
+    local equipInst = bag[bagIndex]
+    if not equipInst then return false, "背包中无此装备" end
+
+    local tmpl = DE.TEMPLATES[equipInst.templateId]
+    if not tmpl then return false, "装备模板不存在" end
+
+    local slot = tmpl.slot
+    -- 如果该槽位已有装备，先卸下到背包
+    if hero.equips[slot] then
+        bag[#bag + 1] = hero.equips[slot]
+    end
+    hero.equips[slot] = equipInst
+    table.remove(bag, bagIndex)
+
+    M.RecalcPower(state)
+    return true, tmpl.name .. " 已装备"
+end
+
+--- 卸下装备（从英雄槽位到背包）
+---@param state table
+---@param heroId string
+---@param slot string
+---@return boolean, string
+function M.EquipRemove(state, heroId, slot)
+    local hero = state.heroes[heroId]
+    if not hero then return false, "英雄不存在" end
+    hero.equips = hero.equips or {}
+
+    local equipped = hero.equips[slot]
+    if not equipped then return false, "该槽位无装备" end
+
+    state.equipBag = state.equipBag or {}
+    state.equipBag[#state.equipBag + 1] = equipped
+    hero.equips[slot] = nil
+
+    M.RecalcPower(state)
+    local tmpl = DE.TEMPLATES[equipped.templateId]
+    return true, (tmpl and tmpl.name or "装备") .. " 已卸下"
+end
+
+--- 强化装备
+---@param state table
+---@param heroId string
+---@param slot string
+---@return boolean, string
+function M.EquipEnhance(state, heroId, slot)
+    local hero = state.heroes[heroId]
+    if not hero then return false, "英雄不存在" end
+    hero.equips = hero.equips or {}
+
+    local inst = hero.equips[slot]
+    if not inst then return false, "该槽位无装备" end
+
+    local maxLv = DE.GetEnhanceMaxLevel(hero.level)
+    local curLv = inst.level or 0
+    if curLv >= maxLv then
+        return false, "已达强化上限(Lv." .. maxLv .. ")"
+    end
+
+    local cost, rate, downgrade = DE.GetEnhanceCost(curLv)
+    if state.copper < cost then
+        return false, "铜币不足(需要" .. cost .. ")"
+    end
+
+    state.copper = state.copper - cost
+
+    -- 判定成功/失败
+    local roll = math.random()
+    if roll <= rate then
+        inst.level = curLv + 1
+        M.RecalcPower(state)
+        local tmpl = DE.TEMPLATES[inst.templateId]
+        return true, (tmpl and tmpl.name or "装备") .. " 强化至 +" .. inst.level
+    else
+        -- 失败降级
+        if downgrade > 0 then
+            inst.level = math.max(0, curLv - downgrade)
+        end
+        return false, "强化失败" .. (downgrade > 0 and ("，降至 +" .. inst.level) or "")
+    end
+end
+
+--- 精炼装备（消耗同名装备，从背包中扣除）
+---@param state table
+---@param heroId string
+---@param slot string
+---@return boolean, string
+function M.EquipRefine(state, heroId, slot)
+    local hero = state.heroes[heroId]
+    if not hero then return false, "英雄不存在" end
+    hero.equips = hero.equips or {}
+
+    local inst = hero.equips[slot]
+    if not inst then return false, "该槽位无装备" end
+
+    local curRefine = inst.refineLevel or 0
+    if curRefine >= DE.MAX_REFINE then
+        return false, "已达精炼上限"
+    end
+
+    local tmpl = DE.TEMPLATES[inst.templateId]
+    if not tmpl or tmpl.quality < 5 then
+        return false, "仅橙色及以上装备可精炼"
+    end
+
+    -- 从背包中找同名装备
+    state.equipBag = state.equipBag or {}
+    local materialIdx = nil
+    for i, bagItem in ipairs(state.equipBag) do
+        if bagItem.templateId == inst.templateId then
+            materialIdx = i
+            break
+        end
+    end
+    if not materialIdx then
+        return false, "缺少同名装备作为材料"
+    end
+
+    table.remove(state.equipBag, materialIdx)
+    inst.refineLevel = curRefine + 1
+    M.RecalcPower(state)
+    return true, tmpl.name .. " 精炼至 " .. inst.refineLevel .. " 级"
+end
+
+--- 洗练装备（重置未锁定副属性）
+---@param state table
+---@param heroId string
+---@param slot string
+---@param lockIndexes table|nil 要锁定的副属性索引列表
+---@return boolean, string
+function M.EquipReforge(state, heroId, slot, lockIndexes)
+    local hero = state.heroes[heroId]
+    if not hero then return false, "英雄不存在" end
+    hero.equips = hero.equips or {}
+
+    local inst = hero.equips[slot]
+    if not inst then return false, "该槽位无装备" end
+
+    local tmpl = DE.TEMPLATES[inst.templateId]
+    if not tmpl or tmpl.quality < 4 then
+        return false, "仅紫色及以上装备可洗练"
+    end
+
+    -- 洗练石消耗
+    state.inventory = state.inventory or {}
+    if (state.inventory.reforge_stone or 0) < 1 then
+        return false, "洗练石不足"
+    end
+
+    -- 锁定消耗元宝
+    lockIndexes = lockIndexes or {}
+    local lockCost = #lockIndexes * DE.REFORGE_LOCK_COST
+    if lockCost > 0 and (state.yuanbao or 0) < lockCost then
+        return false, "元宝不足(锁定需" .. lockCost .. ")"
+    end
+
+    state.inventory.reforge_stone = state.inventory.reforge_stone - 1
+    if lockCost > 0 then
+        state.yuanbao = state.yuanbao - lockCost
+    end
+
+    -- 记录锁定的副属性
+    local lockedSet = {}
+    for _, li in ipairs(lockIndexes) do lockedSet[li] = true end
+
+    -- 获取最大条数
+    local subCfg = DE.SUB_ATTR_COUNTS[tmpl.quality]
+    local subPool = DE.SUB_ATTR_POOLS[tmpl.quality]
+    if not subCfg or not subPool then
+        return false, "品质不支持洗练"
+    end
+    local maxCount = subCfg.max
+
+    -- 保留锁定的，重新随机未锁定的
+    local oldSubs = inst.subAttrs or {}
+    local newSubs = {}
+    local usedAttrs = {}
+
+    -- 先保留锁定的
+    for i, sub in ipairs(oldSubs) do
+        if lockedSet[i] then
+            newSubs[#newSubs + 1] = sub
+            usedAttrs[sub.attr] = true
+        end
+    end
+
+    -- 随机补充到最大条数
+    local needCount = maxCount - #newSubs
+    local candidates = {}
+    for _, p in ipairs(subPool) do
+        if not usedAttrs[p.attr] then
+            candidates[#candidates + 1] = p
+        end
+    end
+    local rolled = DE.RollSubAttrs(candidates, needCount)
+    for _, r in ipairs(rolled) do
+        newSubs[#newSubs + 1] = r
+    end
+
+    inst.subAttrs = newSubs
+    inst.locked = lockIndexes
+    M.RecalcPower(state)
+    return true, "洗练完成"
+end
+
+--- 战斗掉落装备（战斗胜利后调用）
+---@param state table
+---@param nodeType string
+---@return table|nil droppedEquip  掉落的装备实例(nil=未掉落)
+function M.TryDropEquip(state, nodeType)
+    local minQ, maxQ, dropRate = DE.GetDropParams(nodeType)
+    if math.random() > dropRate then return nil end
+
+    local equip = DE.GenerateEquip(minQ, maxQ)
+    if not equip then return nil end
+
+    state.equipBag = state.equipBag or {}
+    state.equipBag[#state.equipBag + 1] = equip
+    return equip
 end
 
 return M

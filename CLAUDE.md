@@ -347,6 +347,11 @@ connection:SendRemoteEvent(Shared.EVENTS.GAME_ACTION, true, data)
 | `buy_shop_item` | `{itemId}` | 购买资源商品 |
 | `buy_gift_pack` | `{packId}` | 购买礼包 |
 | `recharge` | `{tierId}` | 模拟充值 |
+| `equip_wear` | `{heroId, bagIndex}` | 穿戴装备 |
+| `equip_remove` | `{heroId, slot}` | 卸下装备 |
+| `equip_enhance` | `{heroId, slot}` | 强化装备 |
+| `equip_refine` | `{heroId, slot}` | 精炼装备 |
+| `equip_reforge` | `{heroId, slot, lockIndexes}` | 洗练装备 |
 
 **新增 Action 时必须更新本清单。**
 

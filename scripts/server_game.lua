@@ -9,6 +9,7 @@
 local State   = require("data.data_state")
 local Battle  = require("data.battle_engine")
 local Shop    = require("data.data_shop")
+local DE      = require("data.data_equip")
 local Shared  = require("network.shared")
 local EVENTS  = Shared.EVENTS
 
@@ -363,26 +364,38 @@ ACTION_HANDLERS["battle"] = function(userId, params)
 
     -- 应用奖励
     local rewards = {}
+    local droppedEquip = nil
     if battleLog.result and battleLog.result.win then
         rewards = State.ApplyBattleRewards(state, battleLog)
+        -- 装备掉落
+        droppedEquip = State.TryDropEquip(state, nodeType)
+        if droppedEquip then
+            local tmpl = DE.TEMPLATES[droppedEquip.templateId]
+            rewards.items[#rewards.items + 1] = {
+                name  = tmpl and tmpl.name or "装备",
+                count = 1,
+                type  = "equip",
+            }
+        end
     end
 
     dirty_[userId] = true
 
     -- 推送战斗结果事件
     sendEvt(userId, "battle_result", {
-        win         = battleLog.result.win,
-        stars       = battleLog.result.stars,
-        rounds      = battleLog.rounds,
-        totalRounds = battleLog.totalRounds,
-        damageStats = battleLog.result.damageStats,
-        healStats   = battleLog.result.healStats,
-        allyAlive   = battleLog.result.allyAlive,
-        enemyAlive  = battleLog.result.enemyAlive,
-        drops       = battleLog.result.drops,
-        rewards     = rewards,
-        mapId       = mapId,
-        nodeId      = nodeId,
+        win          = battleLog.result.win,
+        stars        = battleLog.result.stars,
+        rounds       = battleLog.rounds,
+        totalRounds  = battleLog.totalRounds,
+        damageStats  = battleLog.result.damageStats,
+        healStats    = battleLog.result.healStats,
+        allyAlive    = battleLog.result.allyAlive,
+        enemyAlive   = battleLog.result.enemyAlive,
+        drops        = battleLog.result.drops,
+        rewards      = rewards,
+        mapId        = mapId,
+        nodeId       = nodeId,
+        droppedEquip = droppedEquip,
     })
 
     -- 同步最新状态
@@ -585,6 +598,106 @@ ACTION_HANDLERS["recharge"] = function(userId, params)
         shopType = "recharge",
         tierId   = tierId,
         yuanbao  = total,
+    })
+    sendSync(userId)
+end
+
+------------------------------------------------------------
+-- 装备系统 Action
+------------------------------------------------------------
+
+--- equip_wear: 穿戴装备
+ACTION_HANDLERS["equip_wear"] = function(userId, params)
+    local state = players_[userId]
+    local heroId   = params.heroId
+    local bagIndex = params.bagIndex
+    if not heroId or not bagIndex then
+        sendEvt(userId, "error", { msg = "缺少参数" })
+        return
+    end
+    local ok, msg = State.EquipWear(state, heroId, bagIndex)
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "equip_wear",
+        success = ok,
+        msg     = msg,
+    })
+    sendSync(userId)
+end
+
+--- equip_remove: 卸下装备
+ACTION_HANDLERS["equip_remove"] = function(userId, params)
+    local state = players_[userId]
+    local heroId = params.heroId
+    local slot   = params.slot
+    if not heroId or not slot then
+        sendEvt(userId, "error", { msg = "缺少参数" })
+        return
+    end
+    local ok, msg = State.EquipRemove(state, heroId, slot)
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "equip_remove",
+        success = ok,
+        msg     = msg,
+    })
+    sendSync(userId)
+end
+
+--- equip_enhance: 强化装备
+ACTION_HANDLERS["equip_enhance"] = function(userId, params)
+    local state = players_[userId]
+    local heroId = params.heroId
+    local slot   = params.slot
+    if not heroId or not slot then
+        sendEvt(userId, "error", { msg = "缺少参数" })
+        return
+    end
+    local ok, msg = State.EquipEnhance(state, heroId, slot)
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "equip_enhance",
+        success = ok,
+        msg     = msg,
+    })
+    sendSync(userId)
+end
+
+--- equip_refine: 精炼装备
+ACTION_HANDLERS["equip_refine"] = function(userId, params)
+    local state = players_[userId]
+    local heroId = params.heroId
+    local slot   = params.slot
+    if not heroId or not slot then
+        sendEvt(userId, "error", { msg = "缺少参数" })
+        return
+    end
+    local ok, msg = State.EquipRefine(state, heroId, slot)
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "equip_refine",
+        success = ok,
+        msg     = msg,
+    })
+    sendSync(userId)
+end
+
+--- equip_reforge: 洗练装备
+ACTION_HANDLERS["equip_reforge"] = function(userId, params)
+    local state = players_[userId]
+    local heroId     = params.heroId
+    local slot       = params.slot
+    local lockIndexes = params.lockIndexes or {}
+    if not heroId or not slot then
+        sendEvt(userId, "error", { msg = "缺少参数" })
+        return
+    end
+    local ok, msg = State.EquipReforge(state, heroId, slot, lockIndexes)
+    dirty_[userId] = true
+    sendEvt(userId, "action_result", {
+        action  = "equip_reforge",
+        success = ok,
+        msg     = msg,
     })
     sendSync(userId)
 end
