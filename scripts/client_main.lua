@@ -473,8 +473,8 @@ function Start()
     backButton_ = UI.Button {
         text               = "返回主城",
         position           = "absolute",
-        top                = 52,
-        left               = 12,
+        top                = 63,
+        right              = 15,
         height             = S.btnHeight,
         paddingHorizontal  = 20,
         fontSize           = S.btnFontSize,
