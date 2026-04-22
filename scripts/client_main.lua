@@ -537,8 +537,8 @@ function Start()
         children = {
             HUD.Create(),
             contentContainer_,
-            backButton_,
             overlayContainer_,
+            backButton_,
             startPanel,
         },
     }
