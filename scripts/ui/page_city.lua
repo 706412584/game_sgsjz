@@ -79,12 +79,21 @@ local cityPanel_ = nil
 local function createBuildingWidget(bld, posX, posY)
     local buildingSize = 110
 
-    -- 建筑图片
+    -- 点击回调（整个建筑区域共用）
+    local function onBuildingTap()
+        if callbacks_.onBuildingClick then
+            callbacks_.onBuildingClick(bld.id, bld)
+        end
+    end
+
+    -- 建筑图片（可点击）
     local imgPanel = UI.Panel {
         width           = buildingSize,
         height          = buildingSize,
         backgroundImage = bld.image,
         backgroundFit   = "contain",
+        cursor          = "pointer",
+        onClick         = onBuildingTap,
     }
 
     -- 建筑名标签
@@ -100,11 +109,7 @@ local function createBuildingWidget(bld, posX, posY)
         pressedBackgroundColor = C.jadePressed,
         borderRadius       = 13,
         transition         = "all 0.15s easeOut",
-        onClick = function()
-            if callbacks_.onBuildingClick then
-                callbacks_.onBuildingClick(bld.id, bld)
-            end
-        end,
+        onClick            = onBuildingTap,
     }
 
     -- 容器：绝对定位用数值像素
@@ -154,6 +159,7 @@ function M.Create(gameState, opts)
         position        = "absolute",
         top = 0, left = 0, right = 0, bottom = 0,
         backgroundColor = { 15, 20, 35, 120 },  -- 深蓝半透明遮罩
+        pointerEvents   = "none",
     }
 
     -- 将遮罩插入到建筑列表最前面（先渲染遮罩，再渲染建筑）

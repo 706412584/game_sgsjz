@@ -17,6 +17,9 @@ local copperBadge_
 local yuanbaoBadge_
 local staminaBadge_
 local hudPanel_
+local serverNameLabel_   -- 区服名
+local serverDot_         -- 区服状态点
+local serverGroup_       -- 区服组容器
 
 ------------------------------------------------------------
 -- 创建 HUD 顶栏
@@ -110,6 +113,54 @@ function M.Create()
         },
     }
 
+    -- 区服入口（网络模式下显示）
+    serverDot_ = UI.Panel {
+        width  = 6,
+        height = 6,
+        borderRadius = 3,
+        backgroundColor = { 76, 175, 80, 255 },
+    }
+    serverDot_:SetVisible(false)
+
+    serverNameLabel_ = UI.Label {
+        text      = "",
+        fontSize  = Theme.fontSize.caption,
+        fontColor = C.textDim,
+    }
+
+    serverGroup_ = UI.Panel {
+        flexDirection  = "row",
+        alignItems     = "center",
+        gap            = 4,
+        paddingHorizontal = 6,
+        paddingVertical   = 3,
+        borderRadius   = 10,
+        backgroundColor = { C.panel[1], C.panel[2], C.panel[3], 180 },
+        cursor         = "pointer",
+        onClick = function()
+            local ok, ServerUI = pcall(require, "ui.page_server")
+            if ok and ServerUI.ShowServerSelectModal then
+                ServerUI.ShowServerSelectModal()
+            end
+        end,
+        children = {
+            serverDot_,
+            serverNameLabel_,
+        },
+    }
+    serverGroup_:SetVisible(false)
+
+    -- 左侧组：区服 + 战力
+    local leftGroup = UI.Panel {
+        flexDirection = "row",
+        alignItems    = "center",
+        gap           = 10,
+        children = {
+            serverGroup_,
+            powerLabel_,
+        },
+    }
+
     -- 主 HUD 面板
     hudPanel_ = UI.Panel {
         width               = "100%",
@@ -122,7 +173,7 @@ function M.Create()
         borderBottomWidth   = 1,
         borderBottomColor   = C.border,
         children = {
-            powerLabel_,
+            leftGroup,
             resourceRow,
         },
     }
@@ -150,6 +201,40 @@ function M.Update(state)
         local sta    = state.stamina or 0
         local staMax = state.staminaMax or 120
         staminaBadge_.text = sta .. "/" .. staMax
+    end
+end
+
+------------------------------------------------------------
+-- 更新 HUD 区服显示
+------------------------------------------------------------
+
+local STATUS_COLORS = {
+    ["open"]  = { 76,  175, 80,  255 },
+    ["hot"]   = { 255, 152, 0,   255 },
+    ["maint"] = { 244, 67,  54,  255 },
+}
+
+--- 设置区服名称和状态（网络模式调用）
+---@param serverName string
+---@param status? string  "open"|"hot"|"maint"
+function M.SetServer(serverName, status)
+    if serverGroup_ then
+        serverGroup_:SetVisible(true)
+    end
+    if serverNameLabel_ then
+        serverNameLabel_.text = serverName or ""
+    end
+    if serverDot_ then
+        local dotColor = STATUS_COLORS[status or "open"] or STATUS_COLORS["open"]
+        serverDot_:SetStyle({ backgroundColor = dotColor })
+        serverDot_:SetVisible(true)
+    end
+end
+
+--- 隐藏区服显示（单机模式）
+function M.HideServer()
+    if serverGroup_ then
+        serverGroup_:SetVisible(false)
     end
 end
 

@@ -72,6 +72,7 @@ function M.Create(onEnter)
         position = "absolute",
         bottom   = 0,
         left     = 0,
+        pointerEvents = "none",
         backgroundGradient = {
             direction = "to-bottom",
             colors = {
@@ -88,6 +89,7 @@ function M.Create(onEnter)
         position = "absolute",
         bottom   = 0,
         left     = 0,
+        pointerEvents = "none",
         backgroundGradient = {
             direction = "to-bottom",
             colors = {
@@ -161,9 +163,10 @@ function M.Create(onEnter)
                 backgroundFit   = "contain",
                 width           = 220,
                 height          = 62,
+                pointerEvents   = "none",
             },
         },
-        onPress = function()
+        onClick = function()
             if not enterEnabled_ then return end
             if onEnterCallback_ then onEnterCallback_() end
         end,

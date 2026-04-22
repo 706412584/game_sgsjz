@@ -238,11 +238,23 @@ local function handleGameEvt(evtType, data)
     end
 end
 
+--- 刷新 HUD 区服显示
+local function refreshHudServer()
+    if isNetworkMode_ then
+        local name   = ServerUI.GetSelectedName()
+        local status = ServerUI.GetSelectedStatus()
+        if name ~= "" then
+            HUD.SetServer(name, status)
+        end
+    end
+end
+
 --- 从开始界面进入游戏（双线汇合后调用）
 local function enterGameFromStart()
     -- 隐藏开始界面
     StartPage.Hide()
     HUD.Update(gs())
+    refreshHudServer()
     switchPage("city")
 
     if isNetworkMode_ then
@@ -254,6 +266,7 @@ end
 --- 进入游戏（非开始界面场景：重连/换服后直接进入）
 local function enterGame()
     HUD.Update(gs())
+    refreshHudServer()
     switchPage("city")
 
     if isNetworkMode_ then
@@ -403,9 +416,10 @@ function Start()
             ServerUI.OnServerListResp(list)
         end)
 
-        -- 选服完成 → 标记 + 解锁按钮
+        -- 选服完成 → 标记 + 解锁按钮 + 刷新HUD区服
         ServerUI.OnServerReady(function()
             serverSelected_ = true
+            refreshHudServer()
             -- 如果 GameInit 也到了，直接解锁按钮
             if gameInitReady_ then
                 StartPage.SetEnterEnabled(true)

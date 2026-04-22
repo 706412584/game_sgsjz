@@ -362,4 +362,22 @@ function M.ResetSelection()
     M.RefreshServerLabel()
 end
 
+--- 获取当前选中区服的名称
+---@return string
+function M.GetSelectedName()
+    if selectedServer_ then
+        return selectedServer_.name or ""
+    end
+    return ""
+end
+
+--- 获取当前选中区服的状态
+---@return string
+function M.GetSelectedStatus()
+    if selectedServer_ then
+        return selectedServer_.status or "open"
+    end
+    return "open"
+end
+
 return M
