@@ -72,6 +72,8 @@ M.ROLE_NAMES = {
 ---@field caps {tong:number, yong:number, zhi:number}
 ---@field skill string
 ---@field skillDesc string
+---@field passive string|nil      -- 被动技能名称
+---@field passiveDesc string|nil  -- 被动技能描述
 ---@field evolve string|nil
 ---@field avatar string|nil
 
@@ -91,6 +93,8 @@ M.HEROES = {
         caps    = { tong = 220, yong = 205, zhi = 235 },
         skill   = "挟天子令",
         skillDesc = "全队增伤12%，增怒15点，持续2回合",
+        passive = "奸雄",
+        passiveDesc = "战法增伤12%并为全队回怒",
         evolve  = "乱世曹操",
     },
     xiaohoudun = {
@@ -102,6 +106,8 @@ M.HEROES = {
         caps    = { tong = 230, yong = 210, zhi = 165 },
         skill   = "拔矢啖睛",
         skillDesc = "对单体造成200%伤害，被攻击时反击60%",
+        passive = "刚烈",
+        passiveDesc = "被攻击时60%概率反击",
         evolve  = nil,
     },
     zhangliao = {
@@ -113,6 +119,8 @@ M.HEROES = {
         caps    = { tong = 210, yong = 245, zhi = 180 },
         skill   = "威震逍遥",
         skillDesc = "对纵排造成240%伤害，击杀后追击一次",
+        passive = "疾驰",
+        passiveDesc = "击杀敌人后追击一次",
         evolve  = "破军张辽",
     },
     guojia = {
@@ -124,6 +132,8 @@ M.HEROES = {
         caps    = { tong = 170, yong = 165, zhi = 250 },
         skill   = "十胜十败",
         skillDesc = "全体敌人减怒25，降智15%持续2回合",
+        passive = "鬼才",
+        passiveDesc = "战法减敌怒并降低智力",
         evolve  = "寒星郭嘉",
     },
     simayi = {
@@ -135,6 +145,8 @@ M.HEROES = {
         caps    = { tong = 180, yong = 180, zhi = 270 },
         skill   = "鹰视狼顾",
         skillDesc = "对全体造成160%法伤，附灼烧3回合",
+        passive = "隐忍",
+        passiveDesc = "法伤附灼烧持续消耗敌军",
         evolve  = "冥策司马懿",
     },
     zhenji = {
@@ -146,6 +158,8 @@ M.HEROES = {
         caps    = { tong = 160, yong = 145, zhi = 235 },
         skill   = "洛神赋",
         skillDesc = "群体治疗25%兵力，净化1个负面状态",
+        passive = "洛水清波",
+        passiveDesc = "治疗时净化友军负面状态",
         evolve  = nil,
     },
 
@@ -162,6 +176,8 @@ M.HEROES = {
         caps    = { tong = 210, yong = 190, zhi = 228 },
         skill   = "仁德载物",
         skillDesc = "治疗全体友军20%兵力，附护盾10%持续2回合",
+        passive = "仁德",
+        passiveDesc = "治疗全军并附护盾",
         evolve  = "汉昭刘备",
     },
     guanyu = {
@@ -173,6 +189,8 @@ M.HEROES = {
         caps    = { tong = 225, yong = 250, zhi = 175 },
         skill   = "青龙偃月",
         skillDesc = "对纵排造成250%伤害，半血以下目标斩杀率+20%",
+        passive = "武圣",
+        passiveDesc = "半血以下目标斩杀率+20%",
         evolve  = "武圣关羽",
     },
     zhangfei = {
@@ -184,6 +202,8 @@ M.HEROES = {
         caps    = { tong = 240, yong = 248, zhi = 145 },
         skill   = "丈八蛇矛",
         skillDesc = "对前排造成230%伤害，35%眩晕1回合",
+        passive = "万夫不当",
+        passiveDesc = "攻击35%概率眩晕敌人",
         evolve  = "狂战张飞",
     },
     zhaoyun = {
@@ -195,6 +215,8 @@ M.HEROES = {
         caps    = { tong = 220, yong = 240, zhi = 188 },
         skill   = "七进七出",
         skillDesc = "对纵排造成245%伤害，自身获得15%护盾",
+        passive = "龙胆",
+        passiveDesc = "攻击后获得自身15%护盾",
         evolve  = "神枪赵云",
     },
     zhugeliang = {
@@ -206,6 +228,8 @@ M.HEROES = {
         caps    = { tong = 170, yong = 150, zhi = 275 },
         skill   = "火烧连营",
         skillDesc = "对全体造成170%法伤，40%沉默1回合",
+        passive = "卧龙",
+        passiveDesc = "法伤40%概率沉默敌人",
         evolve  = "神机诸葛",
     },
     pangtong = {
@@ -217,6 +241,8 @@ M.HEROES = {
         caps    = { tong = 155, yong = 150, zhi = 255 },
         skill   = "连环火计",
         skillDesc = "对后排造成220%法伤，附灼烧2回合",
+        passive = "凤雏",
+        passiveDesc = "法伤附灼烧持续伤害",
         evolve  = "凤鸣庞统",
     },
     huangyueying = {
@@ -228,6 +254,8 @@ M.HEROES = {
         caps    = { tong = 185, yong = 170, zhi = 230 },
         skill   = "木牛流马",
         skillDesc = "全队增攻速15%，召唤机关协攻2回合",
+        passive = "机巧",
+        passiveDesc = "全队增攻速并召唤机关协攻",
         evolve  = nil,
     },
     machao = {
@@ -239,6 +267,8 @@ M.HEROES = {
         caps    = { tong = 205, yong = 252, zhi = 165 },
         skill   = "西凉铁骑",
         skillDesc = "对后排单体造成310%伤害，击杀回怒30",
+        passive = "铁骑",
+        passiveDesc = "击杀敌人回复30怒气",
         evolve  = "飞骑马超",
     },
     huangzhong = {
@@ -250,6 +280,8 @@ M.HEROES = {
         caps    = { tong = 210, yong = 245, zhi = 175 },
         skill   = "百步穿杨",
         skillDesc = "对最高血量敌人造成320%伤害，无视50%防御",
+        passive = "神射",
+        passiveDesc = "攻击无视50%防御",
         evolve  = nil,
     },
 
@@ -266,6 +298,8 @@ M.HEROES = {
         caps    = { tong = 208, yong = 205, zhi = 232 },
         skill   = "帝业天下",
         skillDesc = "全队命中+12%，暴击+8%，回怒15",
+        passive = "制衡",
+        passiveDesc = "全队命中暴击提升并回怒",
         evolve  = "帝略孙权",
     },
     sunce = {
@@ -277,6 +311,8 @@ M.HEROES = {
         caps    = { tong = 225, yong = 248, zhi = 172 },
         skill   = "霸王一击",
         skillDesc = "对前排造成260%伤害，吸血30%",
+        passive = "霸体",
+        passiveDesc = "战法吸血30%回复兵力",
         evolve  = "霸王孙策",
     },
     zhouyu = {
@@ -288,6 +324,8 @@ M.HEROES = {
         caps    = { tong = 165, yong = 160, zhi = 272 },
         skill   = "赤壁烈焰",
         skillDesc = "对全体造成155%法伤，附灼烧3回合",
+        passive = "业火",
+        passiveDesc = "法伤附灼烧持续灼伤敌军",
         evolve  = "赤天周瑜",
     },
     luxun = {
@@ -299,6 +337,8 @@ M.HEROES = {
         caps    = { tong = 175, yong = 168, zhi = 252 },
         skill   = "火烧连营",
         skillDesc = "对横排造成200%法伤，灼烧扩散至相邻目标",
+        passive = "火攻",
+        passiveDesc = "灼烧可扩散至相邻目标",
         evolve  = "炎谋陆逊",
     },
     ganning = {
@@ -310,6 +350,8 @@ M.HEROES = {
         caps    = { tong = 198, yong = 232, zhi = 160 },
         skill   = "百骑劫营",
         skillDesc = "对单体造成280%伤害，暴击率+25%",
+        passive = "锦帆",
+        passiveDesc = "暴击率+25%",
         evolve  = nil,
     },
     taishici = {
@@ -321,6 +363,8 @@ M.HEROES = {
         caps    = { tong = 205, yong = 238, zhi = 178 },
         skill   = "双目标打击",
         skillDesc = "对2个目标各造成210%伤害",
+        passive = "双矢",
+        passiveDesc = "战法同时攻击2个目标",
         evolve  = "裂空太史慈",
     },
     daqiao = {
@@ -332,6 +376,8 @@ M.HEROES = {
         caps    = { tong = 165, yong = 140, zhi = 236 },
         skill   = "芳泽无加",
         skillDesc = "全队护盾15%兵力，持续2回合",
+        passive = "国色",
+        passiveDesc = "为全队施加护盾抵挡伤害",
         evolve  = nil,
     },
     xiaoqiao = {
@@ -343,6 +389,8 @@ M.HEROES = {
         caps    = { tong = 150, yong = 145, zhi = 240 },
         skill   = "倾城之恋",
         skillDesc = "对后排造成190%法伤，30%魅惑1回合",
+        passive = "天香",
+        passiveDesc = "法伤30%概率魅惑敌人",
         evolve  = nil,
     },
     sunshangxiang = {
@@ -354,6 +402,8 @@ M.HEROES = {
         caps    = { tong = 195, yong = 225, zhi = 170 },
         skill   = "烈弓连珠",
         skillDesc = "对随机3目标造成160%伤害，15%附灼烧2回合",
+        passive = "烈弓",
+        passiveDesc = "攻击多目标并附灼烧",
         evolve  = nil,
     },
 
@@ -370,6 +420,8 @@ M.HEROES = {
         caps    = { tong = 220, yong = 260, zhi = 165 },
         skill   = "无双破军",
         skillDesc = "对纵排造成265%伤害，35%附破甲2回合",
+        passive = "无双",
+        passiveDesc = "攻击35%概率附破甲",
         evolve  = "魔吕布",
     },
     diaochan = {
@@ -381,6 +433,8 @@ M.HEROES = {
         caps    = { tong = 165, yong = 160, zhi = 248 },
         skill   = "倾国倾城",
         skillDesc = "对后排造成180%法伤，40%混乱1回合",
+        passive = "离间",
+        passiveDesc = "法伤40%概率混乱敌人",
         evolve  = "绝代貂蝉",
     },
     huatuo = {
@@ -392,6 +446,8 @@ M.HEROES = {
         caps    = { tong = 180, yong = 145, zhi = 255 },
         skill   = "青囊术",
         skillDesc = "群疗全体30%兵力，附持续回血3回合",
+        passive = "妙手",
+        passiveDesc = "群疗并附持续回血效果",
         evolve  = "仙医华佗",
     },
     dongzhuo = {
@@ -403,6 +459,8 @@ M.HEROES = {
         caps    = { tong = 248, yong = 215, zhi = 145 },
         skill   = "暴虐横行",
         skillDesc = "前排高肉，每回合自回血8%",
+        passive = "暴虐",
+        passiveDesc = "每回合自动回复8%兵力",
         evolve  = nil,
     },
     yuanshao = {
@@ -414,6 +472,8 @@ M.HEROES = {
         caps    = { tong = 210, yong = 195, zhi = 220 },
         skill   = "四世三公",
         skillDesc = "全队兵力+10%，攻击+8%持续3回合",
+        passive = "盟主",
+        passiveDesc = "全队增加兵力和攻击力",
         evolve  = nil,
     },
     zuoci = {
@@ -425,6 +485,8 @@ M.HEROES = {
         caps    = { tong = 172, yong = 155, zhi = 272 },
         skill   = "太虚幻术",
         skillDesc = "对全体造成150%法伤，50%控制1回合",
+        passive = "幻术",
+        passiveDesc = "法伤50%概率控制敌人",
         evolve  = "太虚左慈",
     },
     caiwenji = {
@@ -436,6 +498,8 @@ M.HEROES = {
         caps    = { tong = 155, yong = 140, zhi = 240 },
         skill   = "胡笳十八拍",
         skillDesc = "恢复全体友军20%兵力，增加10%防御2回合",
+        passive = "悲歌",
+        passiveDesc = "治疗并增加友军防御",
         evolve  = nil,
     },
 
@@ -452,6 +516,8 @@ M.HEROES = {
         caps    = { tong = 240, yong = 278, zhi = 178 },
         skill   = "魔神降世",
         skillDesc = "免控1回合，对纵排造成285%伤害，首次被击杀免死1次",
+        passive = "魔神",
+        passiveDesc = "免控1回合，首次致死免死",
         evolve  = "神吕布",
     },
     shenlvbu = {
@@ -463,6 +529,8 @@ M.HEROES = {
         caps    = { tong = 260, yong = 300, zhi = 195 },
         skill   = "天神无双",
         skillDesc = "破盾后追击，对纵排造成320%伤害，半血以下斩杀率+30%",
+        passive = "天神",
+        passiveDesc = "破盾追击，半血以下斩杀率+30%",
         evolve  = nil,  -- 终阶
     },
 }

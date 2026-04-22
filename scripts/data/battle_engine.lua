@@ -174,6 +174,7 @@ local function parseSkillFromDesc(heroId, heroData)
         { pattern = "(%d+)%%[附概率]*混乱", status = STATUS.CHARM },
         { pattern = "(%d+)%%[附概率]*魅惑", status = STATUS.CHARM },
         { pattern = "(%d+)%%[附概率]*冰冻", status = STATUS.FREEZE },
+        { pattern = "(%d+)%%[附概率]*控制", status = STATUS.STUN },
         { pattern = "附灼烧",               status = STATUS.BURN, fixedRate = 100 },
         { pattern = "附持续回血",            status = STATUS.HOT, fixedRate = 100, isAlly = true },
     }
@@ -195,6 +196,90 @@ local function parseSkillFromDesc(heroId, heroData)
             }
             break
         end
+    end
+
+    -- ============================================================
+    -- 扩展: 解析高级战斗机制 (被动/条件触发)
+    -- ============================================================
+    skill.extras = {}
+
+    -- 吸血: "吸血XX%"
+    local lifestealPct = desc:match("吸血(%d+)%%")
+    if lifestealPct then
+        skill.extras.lifesteal = tonumber(lifestealPct) / 100
+    end
+
+    -- 追击: "击杀后追击一次" / "击杀回怒XX"
+    if desc:find("击杀后追击") or desc:find("追击一次") then
+        skill.extras.pursuitOnKill = true
+    end
+    local killMorale = desc:match("击杀回怒(%d+)")
+    if killMorale then
+        skill.extras.killMoraleBonus = tonumber(killMorale)
+    end
+
+    -- 反击: "被攻击时反击XX%"
+    local counterPct = desc:match("反击(%d+)%%")
+    if counterPct then
+        skill.extras.counterRate = tonumber(counterPct) / 100
+    end
+
+    -- 免死: "免死1次" / "被击杀免死"
+    if desc:find("免死") then
+        skill.extras.deathImmune = true
+    end
+    -- 免控: "免控X回合"
+    local immuneCtrl = desc:match("免控(%d+)回合")
+    if immuneCtrl then
+        skill.extras.immuneControl = tonumber(immuneCtrl)
+    end
+
+    -- 斩杀: "半血以下.*斩杀率+XX%"
+    local executePct = desc:match("斩杀率%+(%d+)%%")
+    if executePct then
+        skill.extras.executeThreshold = 0.5
+        skill.extras.executeRate = tonumber(executePct) / 100
+    end
+
+    -- 无视防御: "无视XX%防御"
+    local ignoreDef = desc:match("无视(%d+)%%防御")
+    if ignoreDef then
+        skill.extras.ignoreDefense = tonumber(ignoreDef) / 100
+    end
+
+    -- 自回血: "自回血XX%"
+    local selfHealPct = desc:match("自回血(%d+)%%")
+    if selfHealPct then
+        skill.extras.selfHealPerTurn = tonumber(selfHealPct) / 100
+    end
+
+    -- 增怒: "增怒XX点" / "回怒XX"
+    local addMorale = desc:match("增怒(%d+)") or desc:match("回怒(%d+)")
+    if addMorale then
+        skill.extras.allyMoraleBoost = tonumber(addMorale)
+    end
+
+    -- 减怒: "减怒XX"
+    local reduceMorale = desc:match("减怒(%d+)")
+    if reduceMorale then
+        skill.extras.enemyMoraleReduce = tonumber(reduceMorale)
+    end
+
+    -- 降智: "降智XX%持续N回合"
+    local reduceZhi = desc:match("降智(%d+)%%")
+    if reduceZhi then
+        skill.extras.debuffZhi = tonumber(reduceZhi) / 100
+    end
+
+    -- 增暴击: "暴击率+XX%" / "暴击+XX%"
+    local critBonus = desc:match("暴击率%+(%d+)%%") or desc:match("暴击%+(%d+)%%")
+    if critBonus then
+        skill.extras.critBonus = tonumber(critBonus) / 100
+    end
+
+    -- 破盾追击: "破盾后追击"
+    if desc:find("破盾后追击") or desc:find("破盾追击") then
+        skill.extras.pursuitOnShieldBreak = true
     end
 
     return skill
@@ -318,6 +403,11 @@ end
 -- 伤害计算公式
 ------------------------------------------------------------
 
+--- Buff增伤倍率(atk_up +20%, def_up 减伤+20%)
+local BUFF_ATK_MULT = 0.20
+local BUFF_DEF_MULT = 0.20
+local BUFF_SPD_PRIO = 15  -- speed_up 先手加成
+
 --- 计算普攻伤害
 ---@param attacker BattleUnit
 ---@param defender BattleUnit
@@ -325,7 +415,17 @@ end
 local function calcBasicDamage(attacker, defender)
     -- 普攻伤害 = 统 * 3 * (1 - 对方统减伤率)
     local baseAtk = attacker.tong * 3
+    -- atk_up: 增伤
+    if attacker.statuses[STATUS.ATK_UP] then
+        baseAtk = baseAtk * (1 + BUFF_ATK_MULT)
+    end
+
     local defRate = math.min(defender.tong * 0.005, 0.6) -- 减伤上限60%
+
+    -- def_up: 额外减伤
+    if defender.statuses[STATUS.DEF_UP] then
+        defRate = math.min(defRate + BUFF_DEF_MULT, 0.75)
+    end
 
     -- 破甲: 防御减半
     if defender.statuses[STATUS.ARMOR_BREAK] then
@@ -354,7 +454,14 @@ end
 local function calcSkillDamage(attacker, defender, multiplier)
     -- 战法伤害 = 勇 * 3 * multiplier * (1 - 对方勇减伤率)
     local baseAtk = attacker.yong * 3
+    if attacker.statuses[STATUS.ATK_UP] then
+        baseAtk = baseAtk * (1 + BUFF_ATK_MULT)
+    end
+
     local defRate = math.min(defender.yong * 0.004, 0.55)
+    if defender.statuses[STATUS.DEF_UP] then
+        defRate = math.min(defRate + BUFF_DEF_MULT, 0.70)
+    end
 
     if defender.statuses[STATUS.ARMOR_BREAK] then
         defRate = defRate * 0.5
@@ -380,7 +487,14 @@ end
 local function calcMagicDamage(attacker, defender, multiplier)
     -- 法伤 = 智 * 3 * multiplier * (1 - 对方智减伤率)
     local baseAtk = attacker.zhi * 3
+    if attacker.statuses[STATUS.ATK_UP] then
+        baseAtk = baseAtk * (1 + BUFF_ATK_MULT)
+    end
+
     local defRate = math.min(defender.zhi * 0.004, 0.5)
+    if defender.statuses[STATUS.DEF_UP] then
+        defRate = math.min(defRate + BUFF_DEF_MULT, 0.65)
+    end
 
     local damage = baseAtk * multiplier * (1 - defRate)
 
@@ -603,6 +717,24 @@ local function tickStatuses(unit)
         }
     end
 
+    -- 被动自回血(如董卓"每回合自回血8%")
+    if unit.heroId then
+        local sk = M.GetSkill(unit.heroId)
+        if sk and sk.extras and sk.extras.selfHealPerTurn then
+            local heal = math.floor(unit.maxHp * sk.extras.selfHealPerTurn)
+            local oldHp = unit.hp
+            unit.hp = math.min(unit.maxHp, unit.hp + heal)
+            local actual = unit.hp - oldHp
+            if actual > 0 then
+                actions[#actions + 1] = {
+                    type   = "passive_heal",
+                    target = unit.name,
+                    heal   = actual,
+                }
+            end
+        end
+    end
+
     -- 减少持续时间
     local expired = {}
     for status, info in pairs(unit.statuses) do
@@ -635,10 +767,12 @@ local function getTurnOrder(allUnits)
             end
         end
     end
-    -- 按 统+勇 降序(高属性先手)
+    -- 按 统+勇 降序(高属性先手), speed_up 加成
     table.sort(alive, function(a, b)
         local sa = a.tong + a.yong * 0.3 + math.random() * 5
         local sb = b.tong + b.yong * 0.3 + math.random() * 5
+        if a.statuses[STATUS.SPEED_UP] then sa = sa + BUFF_SPD_PRIO end
+        if b.statuses[STATUS.SPEED_UP] then sb = sb + BUFF_SPD_PRIO end
         return sa > sb
     end)
     return alive
@@ -647,6 +781,24 @@ end
 ------------------------------------------------------------
 -- 执行单次行动
 ------------------------------------------------------------
+
+--- 检查免死(deathImmune)并处理
+---@param unit BattleUnit
+---@return boolean savedByImmune
+local function checkDeathImmune(unit)
+    if unit.hp > 0 or unit.alive then return false end
+    if not unit.heroId then return false end
+    -- 检查是否有免死标记且尚未触发
+    if unit._deathImmuneUsed then return false end
+    local skill = M.GetSkill(unit.heroId)
+    if skill and skill.extras and skill.extras.deathImmune then
+        unit.hp = math.floor(unit.maxHp * 0.1)
+        unit.alive = true
+        unit._deathImmuneUsed = true
+        return true
+    end
+    return false
+end
 
 --- 执行单个单元的行动
 ---@param actor BattleUnit
@@ -669,6 +821,13 @@ local function executeAction(actor, allUnits)
         end
     end
 
+    -- 获取技能extras(即使不释放战法, 普攻时也需要被动extras)
+    local extras = {}
+    if actor.heroId then
+        local sk = M.GetSkill(actor.heroId)
+        if sk and sk.extras then extras = sk.extras end
+    end
+
     local action = {
         actor    = actor.name,
         actorId  = actor.id,
@@ -681,19 +840,73 @@ local function executeAction(actor, allUnits)
         isCrit   = {},
         killed   = {},
         statuses = {},
+        extras   = {},  -- 记录触发的额外机制
     }
+
+    -- 免控处理: 释放技能时自动施加免控
+    if useSkill and extras.immuneControl then
+        -- 免控会在技能释放的同回合清除控制状态
+        actor.statuses[STATUS.STUN] = nil
+        actor.statuses[STATUS.FREEZE] = nil
+        actor.statuses[STATUS.CHARM] = nil
+        isConfused = false
+        action.extras[#action.extras + 1] = { type = "immune_control" }
+    end
+
+    --- 内部: 处理一次伤害命中的后续(吸血/斩杀/免死/击杀追击等)
+    local function postDamageHit(t, dmg, isSkillHit)
+        -- 斩杀: 低血量目标有概率直接击杀
+        if t.alive and extras.executeRate and extras.executeThreshold then
+            if t.hp / t.maxHp < extras.executeThreshold then
+                if math.random() < extras.executeRate then
+                    t.hp = 0
+                    t.alive = false
+                    action.extras[#action.extras + 1] = { type = "execute", target = t.name }
+                end
+            end
+        end
+
+        -- 免死检查
+        if not t.alive then
+            if checkDeathImmune(t) then
+                action.extras[#action.extras + 1] = { type = "death_immune", target = t.name }
+            end
+        end
+
+        -- 吸血
+        if extras.lifesteal and extras.lifesteal > 0 and actor.alive then
+            local healAmt = math.floor(dmg * extras.lifesteal)
+            if healAmt > 0 then
+                applyHeal(actor, actor, healAmt)
+                action.extras[#action.extras + 1] = { type = "lifesteal", heal = healAmt }
+            end
+        end
+
+        -- 被攻击增怒
+        if t.alive then t.morale = math.min(M.MORALE_MAX, t.morale + M.MORALE_BE_HIT) end
+        -- 击杀增怒
+        if not t.alive then
+            actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_KILL)
+            -- 击杀回怒额外加成
+            if extras.killMoraleBonus then
+                actor.morale = math.min(M.MORALE_MAX, actor.morale + extras.killMoraleBonus)
+                action.extras[#action.extras + 1] = { type = "kill_morale", bonus = extras.killMoraleBonus }
+            end
+        end
+    end
 
     if useSkill and skill then
         -- 释放战法
+        local pursuitKillTarget = nil  -- 追击: 记录是否有击杀
+
         for _, eff in ipairs(skill.effects) do
             local targets
             if isConfused and eff.type ~= EFFECT.HEAL and eff.type ~= EFFECT.SHIELD and eff.type ~= EFFECT.BUFF then
-                -- 混乱: 攻击己方
-                targets = selectTargets(actor, allUnits, eff.target)
-                -- 混掉 side(交换攻击方向)
                 local confusedUnits = getAliveUnits(allUnits, actor.side)
                 if #confusedUnits > 0 then
                     targets = { confusedUnits[math.random(#confusedUnits)] }
+                else
+                    targets = selectTargets(actor, allUnits, eff.target)
                 end
             else
                 targets = selectTargets(actor, allUnits, eff.target)
@@ -701,28 +914,44 @@ local function executeAction(actor, allUnits)
 
             for _, t in ipairs(targets) do
                 if eff.type == EFFECT.DAMAGE then
-                    local dmg, crit = calcSkillDamage(actor, t, eff.multiplier or 1.8)
+                    local mult = eff.multiplier or 1.8
+                    -- 无视防御: 临时降低对方属性参与计算
+                    local origYong = t.yong
+                    if extras.ignoreDefense then
+                        t.yong = math.floor(t.yong * (1 - extras.ignoreDefense))
+                    end
+                    local dmg, crit = calcSkillDamage(actor, t, mult)
+                    t.yong = origYong  -- 恢复
+                    -- 暴击加成
+                    if extras.critBonus and not crit then
+                        if math.random() < extras.critBonus then
+                            dmg = math.floor(dmg * M.CRIT_MULTIPLIER)
+                            crit = true
+                        end
+                    end
                     applyDamage(actor, t, dmg)
                     action.targets[#action.targets + 1] = t.name
                     action.damages[#action.damages + 1] = dmg
                     action.isCrit[#action.isCrit + 1] = crit
                     action.killed[#action.killed + 1] = not t.alive
-
-                    -- 被攻击增怒
-                    if t.alive then t.morale = math.min(M.MORALE_MAX, t.morale + M.MORALE_BE_HIT) end
-                    -- 击杀增怒
-                    if not t.alive then actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_KILL) end
+                    postDamageHit(t, dmg, true)
+                    if not t.alive then pursuitKillTarget = t end
 
                 elseif eff.type == EFFECT.MAGIC then
-                    local dmg, crit = calcMagicDamage(actor, t, eff.multiplier or 1.5)
+                    local mult = eff.multiplier or 1.5
+                    local origZhi = t.zhi
+                    if extras.ignoreDefense then
+                        t.zhi = math.floor(t.zhi * (1 - extras.ignoreDefense))
+                    end
+                    local dmg, crit = calcMagicDamage(actor, t, mult)
+                    t.zhi = origZhi
                     applyDamage(actor, t, dmg)
                     action.targets[#action.targets + 1] = t.name
                     action.damages[#action.damages + 1] = dmg
                     action.isCrit[#action.isCrit + 1] = crit
                     action.killed[#action.killed + 1] = not t.alive
-
-                    if t.alive then t.morale = math.min(M.MORALE_MAX, t.morale + M.MORALE_BE_HIT) end
-                    if not t.alive then actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_KILL) end
+                    postDamageHit(t, dmg, true)
+                    if not t.alive then pursuitKillTarget = t end
 
                 elseif eff.type == EFFECT.HEAL then
                     local heal = calcHeal(actor, t, eff.pct or 0.2)
@@ -769,6 +998,57 @@ local function executeAction(actor, allUnits)
                 end
             end
         end
+
+        -- ============================================================
+        -- 战法extras后处理
+        -- ============================================================
+
+        -- 增怒(全队): 如曹操"增怒15点"
+        if extras.allyMoraleBoost then
+            local allies = getAliveUnits(allUnits, actor.side)
+            for _, a in ipairs(allies) do
+                a.morale = math.min(M.MORALE_MAX, a.morale + extras.allyMoraleBoost)
+            end
+            action.extras[#action.extras + 1] = { type = "ally_morale", boost = extras.allyMoraleBoost }
+        end
+
+        -- 减怒(全敌): 如郭嘉"减怒25"
+        if extras.enemyMoraleReduce then
+            local enemySide = actor.side == "ally" and "enemy" or "ally"
+            local enemies = getAliveUnits(allUnits, enemySide)
+            for _, e in ipairs(enemies) do
+                e.morale = math.max(0, e.morale - extras.enemyMoraleReduce)
+            end
+            action.extras[#action.extras + 1] = { type = "enemy_morale_reduce", amount = extras.enemyMoraleReduce }
+        end
+
+        -- 降智: 如郭嘉"降智15%持续2回合"(通过临时debuff模拟)
+        if extras.debuffZhi then
+            local enemySide = actor.side == "ally" and "enemy" or "ally"
+            local enemies = getAliveUnits(allUnits, enemySide)
+            for _, e in ipairs(enemies) do
+                local reduction = math.floor(e.zhi * extras.debuffZhi)
+                e.zhi = math.max(1, e.zhi - reduction)
+            end
+            action.extras[#action.extras + 1] = { type = "debuff_zhi", pct = extras.debuffZhi }
+        end
+
+        -- 击杀追击: 再攻击一个随机存活敌人
+        if extras.pursuitOnKill and pursuitKillTarget then
+            local enemySide = actor.side == "ally" and "enemy" or "ally"
+            local remaining = getAliveUnits(allUnits, enemySide)
+            if #remaining > 0 then
+                local pt = remaining[math.random(#remaining)]
+                local pdmg, pcrit = calcSkillDamage(actor, pt, 1.5)
+                applyDamage(actor, pt, pdmg)
+                action.targets[#action.targets + 1] = pt.name
+                action.damages[#action.damages + 1] = pdmg
+                action.isCrit[#action.isCrit + 1] = pcrit
+                action.killed[#action.killed + 1] = not pt.alive
+                action.extras[#action.extras + 1] = { type = "pursuit", target = pt.name, damage = pdmg }
+                if not pt.alive then checkDeathImmune(pt) end
+            end
+        end
     else
         -- 普通攻击
         local enemySide = actor.side == "ally" and "enemy" or "ally"
@@ -789,6 +1069,13 @@ local function executeAction(actor, allUnits)
 
         for _, t in ipairs(targets) do
             local dmg, crit = calcBasicDamage(actor, t)
+            -- 暴击加成(被动)
+            if extras.critBonus and not crit then
+                if math.random() < extras.critBonus then
+                    dmg = math.floor(dmg * M.CRIT_MULTIPLIER)
+                    crit = true
+                end
+            end
             applyDamage(actor, t, dmg)
             action.targets[#action.targets + 1] = t.name
             action.damages[#action.damages + 1] = dmg
@@ -797,8 +1084,7 @@ local function executeAction(actor, allUnits)
 
             -- 士气变化
             actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_HIT)
-            if t.alive then t.morale = math.min(M.MORALE_MAX, t.morale + M.MORALE_BE_HIT) end
-            if not t.alive then actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_KILL) end
+            postDamageHit(t, dmg, false)
         end
     end
 
@@ -937,6 +1223,42 @@ function M.RunBattle(allyUnits, enemyUnits, mapId, nodeId)
             local action = executeAction(actor, allUnits)
             if action then
                 actions[#actions + 1] = action
+
+                -- 反击检查: 被攻击的英雄如果有counterRate, 触发反击
+                if action.type == "attack" or action.type == "skill" then
+                    for ti = 1, #action.targets do
+                        local tName = action.targets[ti]
+                        local dmgVal = action.damages[ti] or 0
+                        if dmgVal > 0 then
+                            -- 查找对应的目标单元
+                            for _, u in ipairs(allUnits) do
+                                if u.name == tName and u.alive and u.heroId and u.side ~= actor.side then
+                                    local tSkill = M.GetSkill(u.heroId)
+                                    if tSkill and tSkill.extras and tSkill.extras.counterRate then
+                                        if math.random() < tSkill.extras.counterRate and actor.alive then
+                                            local cDmg, cCrit = calcBasicDamage(u, actor)
+                                            applyDamage(u, actor, cDmg)
+                                            actions[#actions + 1] = {
+                                                actor   = u.name,
+                                                actorId = u.id,
+                                                side    = u.side,
+                                                type    = "counter",
+                                                targets = { actor.name },
+                                                damages = { cDmg },
+                                                isCrit  = { cCrit },
+                                                killed  = { not actor.alive },
+                                                heals   = {},
+                                                statuses = {},
+                                                extras  = {},
+                                            }
+                                        end
+                                    end
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
             end
 
             ::continue::

@@ -375,6 +375,23 @@ local function buildDetailPanel(heroId, heroState)
         }),
     }
 
+    -- 被动技能
+    if db.passive then
+        detailChildren[#detailChildren + 1] = Comp.SanCard({
+            title = "被动：" .. db.passive,
+            children = {
+                UI.Label {
+                    text       = db.passiveDesc or "",
+                    fontSize   = Theme.fontSize.body,
+                    fontColor  = C.jade,
+                    whiteSpace = "normal",
+                    width      = "100%",
+                    marginTop  = 4,
+                },
+            },
+        })
+    end
+
     -- 进阶信息
     if db.evolve then
         detailChildren[#detailChildren + 1] = UI.Panel {
