@@ -217,8 +217,8 @@ local function buildNodeHeader(mapId, state)
     local formationBtn = Comp.SanButton({
         text     = "编辑阵容",
         variant  = "secondary",
-        height   = 28,
-        fontSize = 11,
+        height   = S.btnSmHeight,
+        fontSize = S.btnSmFontSize,
         paddingHorizontal = 10,
         onClick  = function()
             if onFormationClick_ then onFormationClick_() end

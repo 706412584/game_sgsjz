@@ -215,8 +215,8 @@ function M.SetupStartScreenSlot(slotPanel)
     local selectBtn = Comp.SanButton {
         text     = "切换",
         variant  = "secondary",
-        height   = 26,
-        fontSize = 10,
+        height   = S.btnSmHeight,
+        fontSize = S.btnSmFontSize,
         paddingHorizontal = 12,
         borderRadius = 13,
         onClick = function()
@@ -310,8 +310,8 @@ function M.ShowServerSelectModal()
                     Comp.SanButton {
                         text     = btnText,
                         variant  = btnVariant,
-                        height   = 28,
-                        fontSize = 10,
+                        height   = S.btnSmHeight,
+                        fontSize = S.btnSmFontSize,
                         paddingHorizontal = 10,
                         disabled = isSelected or not canJoin,
                         onClick = function()

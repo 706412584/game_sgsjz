@@ -482,8 +482,8 @@ local function buildDetailPanel(heroId, heroState)
                             text = "升级×1 (酒:" .. wineCount .. ")",
                             variant = "primary",
                             flexGrow = 1,
-                            height = 32,
-                            fontSize = 11,
+                            height = S.btnSmHeight,
+                            fontSize = S.btnSmFontSize,
                             onClick = function()
                                 local ok, msg = DS.UseExpWine(cachedState_, heroId, 1)
                                 if ok then
@@ -498,8 +498,8 @@ local function buildDetailPanel(heroId, heroState)
                             text = "升级×10",
                             variant = "primary",
                             flexGrow = 1,
-                            height = 32,
-                            fontSize = 11,
+                            height = S.btnSmHeight,
+                            fontSize = S.btnSmFontSize,
                             onClick = function()
                                 local ok, msg = DS.UseExpWine(cachedState_, heroId, 10)
                                 if ok then
@@ -527,8 +527,8 @@ local function buildDetailPanel(heroId, heroState)
                             text = star >= DS.MAX_HERO_STAR and "已满星" or ("升星→" .. (star + 1) .. "★"),
                             variant = "gold",
                             flexGrow = 1,
-                            height = 32,
-                            fontSize = 11,
+                            height = S.btnSmHeight,
+                            fontSize = S.btnSmFontSize,
                             onClick = function()
                                 if star >= DS.MAX_HERO_STAR then
                                     Modal.Alert("提示", "已满星")
@@ -577,8 +577,8 @@ local function buildDetailPanel(heroId, heroState)
                 Comp.SanButton({
                     text = frags >= 30 and "合成英雄" or "碎片不足",
                     variant = frags >= 30 and "gold" or "secondary",
-                    height = 32,
-                    fontSize = 12,
+                    height = S.btnSmHeight,
+                    fontSize = S.btnSmFontSize,
                     marginTop = 6,
                     onClick = function()
                         if frags < 30 then

@@ -159,8 +159,8 @@ local function createResourceCard(item)
                 text    = item.price .. " 元宝",
                 variant = "primary",
                 width   = 90,
-                height  = 32,
-                fontSize = 11,
+                height  = S.btnSmHeight,
+                fontSize = S.btnSmFontSize,
                 onClick = function()
                     Modal.Confirm("购买确认",
                         "确定花费 " .. item.price .. " 元宝购买\n"
@@ -324,8 +324,8 @@ local function createGiftCard(pack)
                         text     = soldOut and "已售罄" or (pack.price .. " 元宝"),
                         variant  = soldOut and "secondary" or "gold",
                         width    = 100,
-                        height   = 32,
-                        fontSize = 11,
+                        height   = S.btnSmHeight,
+                        fontSize = S.btnSmFontSize,
                         disabled = soldOut,
                         onClick  = function()
                             if soldOut then return end
@@ -421,8 +421,8 @@ local function createRechargeCard(tier)
                 text    = tier.price .. " 元",
                 variant = "gold",
                 width   = 80,
-                height  = 34,
-                fontSize = 12,
+                height  = S.btnSmHeight,
+                fontSize = S.btnSmFontSize,
                 onClick = function()
                     Modal.Confirm("充值确认",
                         "确定充值 " .. tier.price .. " 元?\n"

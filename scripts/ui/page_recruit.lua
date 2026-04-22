@@ -307,8 +307,8 @@ local function createActionBar(gameState)
                         text    = "单抽 x1",
                         variant = "primary",
                         width   = 90,
-                        height  = 36,
-                        fontSize = 13,
+                        height  = S.btnSmHeight,
+                        fontSize = S.btnSmFontSize,
                         onClick = function()
                             if callbacks_.onRecruit then
                                 callbacks_.onRecruit("single")
@@ -319,8 +319,8 @@ local function createActionBar(gameState)
                         text    = "十连 x10",
                         variant = "gold",
                         width   = 100,
-                        height  = 36,
-                        fontSize = 13,
+                        height  = S.btnSmHeight,
+                        fontSize = S.btnSmFontSize,
                         onClick = function()
                             if callbacks_.onRecruit then
                                 callbacks_.onRecruit("ten")

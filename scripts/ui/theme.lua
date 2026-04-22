@@ -97,10 +97,14 @@ M.sizes = {
     cardRadius      = 8,
     cardPadding     = 12,
 
-    -- 按钮
+    -- 按钮（标准）
     btnHeight       = 44,
     btnRadius       = 8,
     btnFontSize     = 15,
+
+    -- 按钮（紧凑，列表内/行内操作）
+    btnSmHeight     = 40,
+    btnSmFontSize   = 12,
 
     -- 头像
     heroAvatarSm    = 48,

@@ -342,8 +342,8 @@ function M.Create(log, callbacks)
     speedBtn_ = Comp.SanButton({
         text     = "x1",
         variant  = "secondary",
-        height   = 28,
-        fontSize = 11,
+        height   = S.btnSmHeight,
+        fontSize = S.btnSmFontSize,
         onClick  = function()
             speed_ = speed_ >= 3 and 1 or speed_ + 1
             if speedBtn_ then speedBtn_.text = "x" .. speed_ end

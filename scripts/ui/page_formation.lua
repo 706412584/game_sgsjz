@@ -758,8 +758,8 @@ function M.Create(gameState, callbacks)
         text     = "保存阵容",
         variant  = "primary",
         width    = 140,
-        height   = 36,
-        fontSize = 14,
+        height   = S.btnSmHeight,
+        fontSize = S.btnSmFontSize,
         onClick  = function()
             -- 至少需要1个英雄
             local total = #editFront_ + #editBack_
@@ -782,8 +782,8 @@ function M.Create(gameState, callbacks)
         text     = "清空阵容",
         variant  = "secondary",
         width    = 100,
-        height   = 36,
-        fontSize = 12,
+        height   = S.btnSmHeight,
+        fontSize = S.btnSmFontSize,
         onClick  = function()
             Modal.Confirm("确认", "确定清空当前阵容？", function()
                 editFront_ = {}

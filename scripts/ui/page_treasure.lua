@@ -81,8 +81,8 @@ local function buildSlotCard(title, inst, slotInfo)
         buttons[#buttons + 1] = Comp.SanButton {
             text = costText,
             variant = "primary",
-            fontSize = 11,
-            height = 32,
+            fontSize = S.btnSmFontSize,
+            height = S.btnSmHeight,
             onClick = function()
                 if slotInfo.type == "exclusive" then
                     sendAction_("treasure_upgrade", {
@@ -102,8 +102,8 @@ local function buildSlotCard(title, inst, slotInfo)
         buttons[#buttons + 1] = Comp.SanButton {
             text = "卸下",
             variant = "secondary",
-            fontSize = 11,
-            height = 32,
+            fontSize = S.btnSmFontSize,
+            height = S.btnSmHeight,
             onClick = function()
                 sendAction_("treasure_remove", {
                     heroId = selectedHeroId_,
@@ -205,8 +205,8 @@ local function buildBagSection(state)
                 Comp.SanButton {
                     text = "槽1",
                     variant = "primary",
-                    fontSize = 12,
-                    height = 34,
+                    fontSize = S.btnSmFontSize,
+                    height = S.btnSmHeight,
                     paddingHorizontal = 10,
                     onClick = function()
                         sendAction_("treasure_equip", {
@@ -220,8 +220,8 @@ local function buildBagSection(state)
                 Comp.SanButton {
                     text = "槽2",
                     variant = "primary",
-                    fontSize = 12,
-                    height = 34,
+                    fontSize = S.btnSmFontSize,
+                    height = S.btnSmHeight,
                     paddingHorizontal = 10,
                     onClick = function()
                         sendAction_("treasure_equip", {
@@ -297,8 +297,8 @@ local function buildComposeSection(state)
                 Comp.SanButton {
                     text = "合成",
                     variant = "gold",
-                    fontSize = 12,
-                    height = 34,
+                    fontSize = S.btnSmFontSize,
+                    height = S.btnSmHeight,
                     paddingHorizontal = 12,
                     disabled = (state.inventory.treasure_shards or 0) < (tmpl.composeCost or 50),
                     onClick = function()
@@ -338,8 +338,8 @@ local function buildComposeSection(state)
                         Comp.SanButton {
                             text = "合成",
                             variant = "gold",
-                            fontSize = 12,
-                            height = 34,
+                            fontSize = S.btnSmFontSize,
+                            height = S.btnSmHeight,
                             paddingHorizontal = 12,
                             disabled = (state.inventory.exclusive_shards or 0) < (exTmpl.composeCost or 30),
                             onClick = function()
