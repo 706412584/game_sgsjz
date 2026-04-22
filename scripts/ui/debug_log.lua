@@ -6,13 +6,13 @@ local UI = require("urhox-libs/UI")
 
 local M = {}
 
-local MAX_LINES = 40
-local PANEL_WIDTH = 260
-local PANEL_HEIGHT = 200
-local FONT_SIZE = 7
-local TAG_FONT = 7
-local BUBBLE_SIZE = 42
-local BUBBLE_FONT = 6
+local MAX_LINES = 60
+local PANEL_WIDTH = 480
+local PANEL_HEIGHT = 340
+local FONT_SIZE = 12
+local TAG_FONT = 11
+local BUBBLE_SIZE = 56
+local BUBBLE_FONT = 9
 
 local enabled_ = false
 local panel_ = nil
@@ -99,10 +99,10 @@ end
 local function createTagBtn(tag)
     if tagBtns_[tag] then return end
     local btn = UI.Panel {
-        height = 16,
-        paddingHorizontal = 4,
+        height = 28,
+        paddingHorizontal = 8,
         backgroundColor = { 0, 100, 0, 220 },
-        borderRadius = 3,
+        borderRadius = 4,
         borderWidth = 1,
         borderColor = { 0, 200, 0, 200 },
         justifyContent = "center",
@@ -287,7 +287,7 @@ local function createBubble()
         borderRadius = BUBBLE_SIZE / 2,
         pointerEvents = "auto",
         justifyContent = "center", alignItems = "center",
-        overflow = "hidden", paddingHorizontal = 3,
+        overflow = "hidden", paddingHorizontal = 4,
         onClick = function(self)
             if not dragging_ then switchToMaximized() end
         end,
@@ -302,7 +302,7 @@ local function createBubble()
         end,
         children = {
             UI.Label {
-                text = "DBG", fontSize = 6, fontWeight = "bold",
+                text = "DBG", fontSize = 10, fontWeight = "bold",
                 fontColor = { 0, 255, 0, 255 }, textAlign = "center",
                 width = "100%", pointerEvents = "none",
             },
@@ -326,13 +326,13 @@ local function createPanel()
     }
     filterBarPanel_ = UI.Panel {
         width = "100%", flexDirection = "row", flexWrap = "wrap",
-        gap = 3, paddingHorizontal = 3, paddingVertical = 2,
+        gap = 5, paddingHorizontal = 6, paddingVertical = 4,
         backgroundColor = { 20, 20, 20, 200 },
     }
     filterBarPanel_:AddChild(UI.Panel {
-        height = 16, paddingHorizontal = 4,
+        height = 28, paddingHorizontal = 8,
         backgroundColor = { 0, 80, 120, 220 },
-        borderRadius = 3, borderWidth = 1,
+        borderRadius = 4, borderWidth = 1,
         borderColor = { 0, 160, 220, 200 },
         justifyContent = "center", alignItems = "center",
         onClick = function(self)
@@ -347,31 +347,31 @@ local function createPanel()
         },
     })
     titleLabel_ = UI.Label {
-        text = "[-]", fontSize = 7, fontColor = { 200, 200, 200, 200 },
+        text = "[-]", fontSize = 12, fontColor = { 200, 200, 200, 200 },
     }
     local titleBar = UI.Panel {
-        width = "100%", height = 18,
+        width = "100%", height = 32,
         flexDirection = "row", alignItems = "center",
         justifyContent = "space-between",
         backgroundColor = { 0, 80, 0, 200 },
-        paddingHorizontal = 4,
+        paddingHorizontal = 8,
         children = {
-            UI.Label { text = "DEBUG", fontSize = 7, fontWeight = "bold",
+            UI.Label { text = "DEBUG", fontSize = 13, fontWeight = "bold",
                 fontColor = { 0, 255, 0, 255 } },
             UI.Panel {
-                flexDirection = "row", gap = 6,
+                flexDirection = "row", gap = 8,
                 children = {
                     UI.Panel {
-                        paddingHorizontal = 4, height = 14,
-                        backgroundColor = { 80, 0, 0, 180 }, borderRadius = 3,
+                        paddingHorizontal = 8, height = 24,
+                        backgroundColor = { 80, 0, 0, 180 }, borderRadius = 4,
                         justifyContent = "center", alignItems = "center",
                         onClick = function(self) lines_ = {}; refreshDisplay() end,
-                        children = { UI.Label { text = "CLR", fontSize = 6,
+                        children = { UI.Label { text = "CLR", fontSize = 11,
                             fontColor = { 255, 100, 100, 220 } } },
                     },
                     UI.Panel {
-                        paddingHorizontal = 3, height = 14,
-                        backgroundColor = { 60, 60, 60, 180 }, borderRadius = 3,
+                        paddingHorizontal = 6, height = 24,
+                        backgroundColor = { 60, 60, 60, 180 }, borderRadius = 4,
                         justifyContent = "center", alignItems = "center",
                         onClick = function(self) switchToMinimized() end,
                         children = { titleLabel_ },
@@ -381,11 +381,11 @@ local function createPanel()
         },
     }
     panel_ = UI.Panel {
-        position = "absolute", right = 4, top = 30,
+        position = "absolute", right = 8, top = 30,
         width = PANEL_WIDTH, height = PANEL_HEIGHT, zIndex = 999,
-        backgroundColor = { 0, 0, 0, 180 },
+        backgroundColor = { 0, 0, 0, 190 },
         borderWidth = 1, borderColor = { 0, 255, 0, 150 },
-        borderRadius = 4, pointerEvents = "auto",
+        borderRadius = 6, pointerEvents = "auto",
         children = { titleBar, filterBarPanel_, contentPanel_ },
     }
 end
