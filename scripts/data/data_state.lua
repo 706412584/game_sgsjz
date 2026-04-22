@@ -377,55 +377,200 @@ end
 -- 招募系统
 ------------------------------------------------------------
 
---- 单次招募
+------------------------------------------------------------
+-- 招募系统
+------------------------------------------------------------
+
+--- 招募卡池概率配置
+M.RECRUIT_CONFIG = {
+    --- 单抽消耗招募令
+    singleCost  = 1,
+    --- 十连消耗招募令
+    tenCost     = 10,
+    --- 品质概率 (百分比, 总和=100)
+    rates = {
+        { quality = 3, rate = 58 },  -- 紫 58%
+        { quality = 4, rate = 30 },  -- 橙 30%
+        { quality = 5, rate = 10 },  -- 红 10%
+        { quality = 6, rate = 2  },  -- 金 2%
+    },
+    --- 保底: 每 N 抽必出该品质
+    pity = {
+        { quality = 4, every = 10 },  -- 10抽保底橙
+        { quality = 5, every = 50 },  -- 50抽保底红
+    },
+    --- 碎片数量 (按品质)
+    fragByQuality = {
+        [3] = 8,   -- 紫
+        [4] = 5,   -- 橙
+        [5] = 3,   -- 红
+        [6] = 2,   -- 金
+    },
+    --- 整将概率 (百分比, 在抽到该品质后再判定)
+    wholeHeroRate = 8,
+}
+
+--- 初始化招募计数器 (兼容旧存档)
+---@param state table
+local function ensureRecruitCounters(state)
+    if not state.recruitCount then state.recruitCount = 0 end
+    if not state.pityCount4 then state.pityCount4 = 0 end
+    if not state.pityCount5 then state.pityCount5 = 0 end
+end
+
+--- 内部: 执行一次招募抽取
+---@param state table
+---@param guaranteed number|nil 保底品质 (nil=正常概率)
+---@return table result { heroId, heroName, quality, type, count }
+local function rollOnce(state, guaranteed)
+    ensureRecruitCounters(state)
+    state.recruitCount = state.recruitCount + 1
+    state.pityCount4   = state.pityCount4 + 1
+    state.pityCount5   = state.pityCount5 + 1
+
+    local cfg = M.RECRUIT_CONFIG
+
+    -- 确定品质
+    local quality = 3
+    if guaranteed then
+        quality = guaranteed
+    else
+        -- 检查保底
+        local pityHit = false
+        for _, p in ipairs(cfg.pity) do
+            local counter = (p.quality == 4) and state.pityCount4
+                         or (p.quality == 5) and state.pityCount5
+                         or 0
+            if counter >= p.every then
+                quality = math.max(quality, p.quality)
+                pityHit = true
+            end
+        end
+        if not pityHit then
+            -- 正常概率抽取
+            local roll = math.random(1, 100)
+            local cumulative = 0
+            for _, r in ipairs(cfg.rates) do
+                cumulative = cumulative + r.rate
+                if roll <= cumulative then
+                    quality = r.quality
+                    break
+                end
+            end
+        end
+    end
+
+    -- 重置对应保底计数
+    if quality >= 4 then state.pityCount4 = 0 end
+    if quality >= 5 then state.pityCount5 = 0 end
+
+    -- 从对应品质池中随机选英雄
+    local pool = DH.GetByQualityRange(quality, quality)
+    if #pool == 0 then
+        pool = DH.GetByQualityRange(3, 4)  -- fallback
+    end
+    local entry = pool[math.random(1, #pool)]
+    local heroId   = entry.id
+    local heroData = entry.data
+    local fragCount = cfg.fragByQuality[quality] or 5
+
+    -- 判定整将还是碎片
+    local wholeRoll = math.random(1, 100)
+    local isWhole = (wholeRoll <= cfg.wholeHeroRate)
+
+    if isWhole and (not state.heroes[heroId] or state.heroes[heroId].level <= 0) then
+        -- 获得整将
+        if not state.heroes[heroId] then
+            state.heroes[heroId] = { level = 1, star = 1, exp = 0, fragments = 0 }
+        else
+            state.heroes[heroId].level = 1
+            state.heroes[heroId].star  = 1
+        end
+        return {
+            heroId   = heroId,
+            heroName = heroData.name,
+            quality  = heroData.quality,
+            type     = "hero",
+            count    = 1,
+        }
+    else
+        -- 给碎片
+        if isWhole and state.heroes[heroId] and state.heroes[heroId].level > 0 then
+            fragCount = fragCount * 3  -- 已有英雄整将转碎片加量
+        end
+        if state.heroes[heroId] then
+            state.heroes[heroId].fragments = (state.heroes[heroId].fragments or 0) + fragCount
+        else
+            state.heroes[heroId] = { level = 0, star = 0, exp = 0, fragments = fragCount }
+        end
+        return {
+            heroId   = heroId,
+            heroName = heroData.name,
+            quality  = heroData.quality,
+            type     = "fragments",
+            count    = fragCount,
+        }
+    end
+end
+
+--- 单次招募 (兼容旧接口)
 ---@param state table
 ---@return boolean success
 ---@return string  heroId|message
 ---@return table|nil heroInfo
 function M.DoRecruit(state)
-    if (state.zhaomuling or 0) < 1 then
+    if (state.zhaomuling or 0) < M.RECRUIT_CONFIG.singleCost then
         return false, "招募令不足", nil
     end
-    state.zhaomuling = state.zhaomuling - 1
+    state.zhaomuling = state.zhaomuling - M.RECRUIT_CONFIG.singleCost
 
-    -- 获取所有英雄列表
-    local allHeroes = DH.GetAll()
+    local result = rollOnce(state, nil)
+    return true, result.heroId, result
+end
 
-    -- 概率：70%碎片(已有英雄), 25%新英雄碎片, 5%直接获得
-    local roll = math.random(1, 100)
-    local heroEntry = allHeroes[math.random(1, #allHeroes)]
-    local heroId = heroEntry.id
-    local heroData = heroEntry.data
-
-    if roll <= 5 then
-        -- 直接获得完整英雄
-        if not state.heroes[heroId] then
-            state.heroes[heroId] = { level = 1, star = 1, exp = 0, fragments = 0 }
-            return true, heroId, { type = "hero", name = heroData.name, quality = heroData.quality }
-        else
-            -- 已有英雄 → 给碎片
-            state.heroes[heroId].fragments = (state.heroes[heroId].fragments or 0) + 30
-            return true, heroId, { type = "fragments", name = heroData.name, count = 30, quality = heroData.quality }
-        end
-    else
-        -- 给碎片
-        local fragCount = 5
-        if heroData.quality >= 5 then
-            fragCount = 3  -- 红/金品质碎片少
-        elseif heroData.quality >= 4 then
-            fragCount = 5  -- 橙品质
-        else
-            fragCount = 8  -- 蓝/紫品质碎片多
-        end
-
-        if state.heroes[heroId] then
-            state.heroes[heroId].fragments = (state.heroes[heroId].fragments or 0) + fragCount
-        else
-            -- 未拥有英雄 → 先给碎片，攒够30可合成
-            state.heroes[heroId] = { level = 0, star = 0, exp = 0, fragments = fragCount }
-        end
-        return true, heroId, { type = "fragments", name = heroData.name, count = fragCount, quality = heroData.quality }
+--- 十连招募
+---@param state table
+---@return boolean success
+---@return string message
+---@return table[] results  每次抽取结果列表
+function M.DoRecruit10(state)
+    local cost = M.RECRUIT_CONFIG.tenCost
+    if (state.zhaomuling or 0) < cost then
+        return false, "招募令不足(需要" .. cost .. ")", {}
     end
+    state.zhaomuling = state.zhaomuling - cost
+
+    local results = {}
+    for i = 1, 10 do
+        -- 第10次保底至少橙将
+        local guaranteed = nil
+        if i == 10 then
+            ensureRecruitCounters(state)
+            -- 检查这10抽是否出过橙以上
+            local hasOrange = false
+            for _, r in ipairs(results) do
+                if r.quality >= 4 then hasOrange = true; break end
+            end
+            if not hasOrange then guaranteed = 4 end
+        end
+        results[#results + 1] = rollOnce(state, guaranteed)
+    end
+    return true, "十连招募完成", results
+end
+
+--- 获取招募统计信息
+---@param state table
+---@return table { total, pity4, pity5, nextPity4, nextPity5 }
+function M.GetRecruitStats(state)
+    ensureRecruitCounters(state)
+    local cfg = M.RECRUIT_CONFIG
+    return {
+        total     = state.recruitCount,
+        pity4     = state.pityCount4,
+        pity5     = state.pityCount5,
+        nextPity4 = cfg.pity[1].every - state.pityCount4,
+        nextPity5 = cfg.pity[2].every - state.pityCount5,
+    }
 end
 
 --- 碎片合成英雄（需要 30 碎片）

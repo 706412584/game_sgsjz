@@ -564,6 +564,16 @@ function M.Exists(heroId)
     return M.HEROES[heroId] ~= nil
 end
 
+--- 获取全部英雄 {id, data} 列表
+---@return {id:string, data:HeroData}[]
+function M.GetAll()
+    local list = {}
+    for id, data in pairs(M.HEROES) do
+        list[#list + 1] = { id = id, data = data }
+    end
+    return list
+end
+
 --- 获取全部英雄ID列表
 ---@return string[]
 function M.GetAllIds()
@@ -572,6 +582,23 @@ function M.GetAllIds()
         ids[#ids + 1] = id
     end
     return ids
+end
+
+--- 按品质范围获取英雄列表（用于招募卡池）
+---@param minQ number 最低品质
+---@param maxQ number 最高品质
+---@return {id:string, data:HeroData}[]
+function M.GetByQualityRange(minQ, maxQ)
+    local list = {}
+    for id, data in pairs(M.HEROES) do
+        if data.quality >= minQ and data.quality <= maxQ then
+            -- 排除进阶形态（魔吕布/神吕布等），它们不可直接招募
+            if id ~= "molvbu" and id ~= "shenlvbu" then
+                list[#list + 1] = { id = id, data = data }
+            end
+        end
+    end
+    return list
 end
 
 --- 计算英雄总数

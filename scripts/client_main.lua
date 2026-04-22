@@ -10,6 +10,7 @@ local MapPage       = require("ui.page_map")
 local HeroesPage    = require("ui.page_heroes")
 local BattlePage    = require("ui.page_battle")
 local FormationPage = require("ui.page_formation")
+local RecruitPage   = require("ui.page_recruit")
 local Modal         = require("ui.modal_manager")
 local StartPage     = require("ui.page_start")
 local DebugLog      = require("ui.debug_log")
@@ -82,22 +83,7 @@ local function switchPage(pageId)
                 elseif buildingId == "forge" then
                     Modal.Alert("铁匠铺", "锻造系统开发中，敬请期待！")
                 elseif buildingId == "recruit" then
-                    Modal.Confirm("招募", "消耗招募令 x1 进行一次招募？", function()
-                        if isNetworkMode_ then
-                            ClientNet.SendAction("recruit")
-                        else
-                            local ok, heroId, info = State.DoRecruit(gs())
-                            if ok and info then
-                                local desc = info.type == "hero"
-                                    and ("恭喜获得武将: " .. info.name .. "！")
-                                    or  (info.name .. " 碎片 x" .. info.count)
-                                Modal.Alert("招募结果", desc)
-                            else
-                                Modal.Alert("提示", tostring(heroId))
-                            end
-                            HUD.Update(gs())
-                        end
-                    end)
+                    switchPage("recruit")
                 elseif buildingId == "arena" then
                     Modal.Alert("演武场", "竞技系统开发中，敬请期待！")
                 elseif buildingId == "shop" then
@@ -191,6 +177,39 @@ local function switchPage(pageId)
                     .. " 后排=" .. #gs().lineup.back)
             end,
         }))
+
+    elseif pageId == "recruit" then
+        contentContainer_:AddChild(RecruitPage.Create(gs(), {
+            onRecruit = function(recruitType)
+                if recruitType == "single" then
+                    if isNetworkMode_ then
+                        ClientNet.SendAction("recruit")
+                    else
+                        local ok, msg, info = State.DoRecruit(gs())
+                        if ok and info then
+                            RecruitPage.ShowSingleResult(info)
+                        else
+                            Modal.Alert("提示", tostring(msg))
+                        end
+                        RecruitPage.Refresh(gs())
+                        HUD.Update(gs())
+                    end
+                elseif recruitType == "ten" then
+                    if isNetworkMode_ then
+                        ClientNet.SendAction("recruit10")
+                    else
+                        local ok, msg, results = State.DoRecruit10(gs())
+                        if ok and results then
+                            RecruitPage.ShowTenResults(results)
+                        else
+                            Modal.Alert("提示", tostring(msg))
+                        end
+                        RecruitPage.Refresh(gs())
+                        HUD.Update(gs())
+                    end
+                end
+            end,
+        }))
     end
 
     print("[三国神将录] 切换页面: " .. pageId)
@@ -223,15 +242,34 @@ local function handleGameEvt(evtType, data)
         }))
 
     elseif evtType == "recruit_result" then
-        local info = data.info
-        if data.success and info then
-            local desc = info.type == "hero"
-                and ("恭喜获得武将: " .. info.name .. "！")
-                or  (info.name .. " 碎片 x" .. (info.count or 0))
-            Modal.Alert("招募结果", desc)
+        if data.success and data.info then
+            if currentPage_ == "recruit" then
+                RecruitPage.ShowSingleResult(data.info)
+                RecruitPage.Refresh(gs())
+            else
+                local info = data.info
+                local desc = info.type == "hero"
+                    and ("恭喜获得武将: " .. (info.heroName or info.name or "") .. "！")
+                    or  ((info.heroName or info.name or "") .. " 碎片 x" .. (info.count or 0))
+                Modal.Alert("招募结果", desc)
+            end
         else
-            Modal.Alert("提示", tostring(data.heroId or "招募失败"))
+            Modal.Alert("提示", tostring(data.msg or "招募失败"))
         end
+        HUD.Update(gs())
+
+    elseif evtType == "recruit10_result" then
+        if data.success and data.results then
+            if currentPage_ == "recruit" then
+                RecruitPage.ShowTenResults(data.results)
+                RecruitPage.Refresh(gs())
+            else
+                Modal.Alert("十连招募", "获得 " .. #data.results .. " 个结果")
+            end
+        else
+            Modal.Alert("提示", tostring(data.msg or "十连招募失败"))
+        end
+        HUD.Update(gs())
 
     elseif evtType == "action_result" then
         if not data.success then
@@ -402,6 +440,8 @@ function Start()
         HUD.Update(gs())
         if currentPage_ == "map" then
             MapPage.Refresh(gs())
+        elseif currentPage_ == "recruit" then
+            RecruitPage.Refresh(gs())
         end
     end
 

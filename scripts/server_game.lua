@@ -429,7 +429,7 @@ ACTION_HANDLERS["star_up"] = function(userId, params)
     sendSync(userId)
 end
 
---- recruit: 招募
+--- recruit: 单次招募
 ACTION_HANDLERS["recruit"] = function(userId, params)
     local state = players_[userId]
     local ok, heroId, info = State.DoRecruit(state)
@@ -439,6 +439,20 @@ ACTION_HANDLERS["recruit"] = function(userId, params)
         success = ok,
         heroId  = heroId,
         info    = info,
+    })
+    sendSync(userId)
+end
+
+--- recruit10: 十连招募
+ACTION_HANDLERS["recruit10"] = function(userId, params)
+    local state = players_[userId]
+    local ok, msg, results = State.DoRecruit10(state)
+    dirty_[userId] = true
+
+    sendEvt(userId, "recruit10_result", {
+        success = ok,
+        msg     = msg,
+        results = results,
     })
     sendSync(userId)
 end
