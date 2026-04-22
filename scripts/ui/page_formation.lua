@@ -30,6 +30,7 @@ local dragStartX_, dragStartY_ = 0, 0
 local maybeDragHero_ = nil  -- { heroId, widget }
 local cachedCtxLayout_ = nil  -- 拖拽期间缓存 context 绝对坐标(避免每帧重算)
 local dragUpdateBound_ = false  -- Update 事件是否已绑定
+local dragEndFrame_ = -1        -- 拖拽结束帧号(防止同帧 onClick 双重触发)
 
 -- 英雄列表缓存: heroRows_[heroId] = { row=Panel, inLineup=bool }
 local heroRows_ = {}
@@ -118,6 +119,9 @@ local function stopDragTracking()
     if heroListScroll_ and heroListScroll_.props then
         heroListScroll_.props.pointerEvents = nil
     end
+    -- 记录拖拽结束帧: UI 框架的 HandlePointerUp 会在同帧触发 onClick,
+    -- 同帧内的 onClick 必须跳过以防止 "拖拽下阵 + 点击下阵" 双重触发
+    dragEndFrame_ = time.frameNumber
 end
 
 --- 启动每帧拖拽追踪: 订阅 Update 事件, 轮询鼠标位置
@@ -283,6 +287,7 @@ end
 -- 槽位点击: 直接下阵
 ------------------------------------------------------------
 local function onSlotClick(row, idx)
+    if time.frameNumber == dragEndFrame_ then return end
     local arr = row == "front" and editFront_ or editBack_
     if arr[idx] then
         arr[idx] = nil
@@ -315,6 +320,7 @@ local function createHeroRow(heroId)
         backgroundColor = C.panel,
         borderRadius = 6, borderColor = C.border, borderWidth = 1,
         onClick = function()
+            if time.frameNumber == dragEndFrame_ then return end
             if isInLineup(heroId) then
                 Modal.Alert("提示", hero.data.name .. " 已在阵容中")
                 return
