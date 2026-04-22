@@ -1,7 +1,6 @@
 -- ui/page_start.lua — 三国神将录 开始界面 (zIndex=900)
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
-local DBG   = require("ui.debug_log")
 local C     = Theme.colors
 
 local M = {}
@@ -12,17 +11,17 @@ local onEnterCallback_ = nil
 local enterBtn_        = nil
 local enterEnabled_    = false
 
--- 帧动画状态（双层 A/B 交叉淡入淡出）
+-- 帧动画状态（双层 A/B 交叉淡入淡出 — 完整背景帧）
 local EMBER_FRAMES = {
-    "image/embers_f1_20260421160716.png",
-    "image/embers_f2_20260421160810.png",
-    "image/embers_f3_20260421160808.png",
-    "image/embers_f4_20260421160813.png",
+    "image/start_fire_f1_20260422063256.png",
+    "image/start_fire_f2_20260422063306.png",
+    "image/start_fire_f3_20260422063332.png",
+    "image/start_fire_f4_20260422063329.png",
 }
 local FRAME_COUNT    = #EMBER_FRAMES
-local FRAME_INTERVAL = 1.0      -- 每帧停留秒数
-local FRAME_FADE     = 0.6      -- 交叉淡入淡出时长
-local EMBER_OPACITY  = 0.7
+local FRAME_INTERVAL = 1.2      -- 每帧停留秒数
+local FRAME_FADE     = 0.8      -- 交叉淡入淡出时长
+local EMBER_OPACITY  = 1.0
 local bgLayerA_      = nil      -- 当前显示层
 local bgLayerB_      = nil      -- 淡入过渡层
 local frameTimer_    = 0
@@ -54,26 +53,7 @@ function M.Create(onEnter)
         backgroundColor = C.bg,
     }
 
-    -- 1) 纯净背景图
-    startScreen_:AddChild(UI.Panel {
-        backgroundImage = "image/edited_bg_start_clean_20260421153502.png",
-        backgroundFit   = "cover",
-        width           = "100%",
-        height          = "100%",
-        position        = "absolute",
-        top = 0, left = 0,
-    })
-
-    -- 2) 暖色调遮罩（战火氛围）
-    startScreen_:AddChild(UI.Panel {
-        width           = "100%",
-        height          = "100%",
-        position        = "absolute",
-        top = 0, left = 0,
-        backgroundColor = { 40, 15, 5, 30 },
-    })
-
-    -- 3) 火星帧动画（双层 A/B 交叉淡入淡出）
+    -- 1) 火把帧动画背景（双层 A/B 交叉淡入淡出）
     bgLayerA_ = UI.Panel {
         backgroundImage = EMBER_FRAMES[1],
         backgroundFit   = "cover",
@@ -94,10 +74,8 @@ function M.Create(onEnter)
     }
     startScreen_:AddChild(bgLayerA_)
     startScreen_:AddChild(bgLayerB_)
-    DBG.Log("[StartPage] Create: A=" .. tostring(bgLayerA_) .. " B=" .. tostring(bgLayerB_))
-    DBG.Log("[StartPage] Create: frames=" .. FRAME_COUNT .. " interval=" .. FRAME_INTERVAL .. " fade=" .. FRAME_FADE)
 
-    -- 4) 底部火光渐变（暖橙色，模拟篝火映照）
+    -- 2) 底部火光渐变（暖橙色，模拟篝火映照）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
         height   = "35%",
@@ -113,7 +91,7 @@ function M.Create(onEnter)
         },
     })
 
-    -- 5) 底部深色遮罩（让按钮文字可读）
+    -- 3) 底部深色遮罩（让按钮文字可读）
     startScreen_:AddChild(UI.Panel {
         width    = "100%",
         height   = "25%",
@@ -222,22 +200,9 @@ function M.Create(onEnter)
     return startScreen_
 end
 
---- 每帧更新火星帧动画（双层 A/B 交叉淡入淡出）
+--- 每帧更新火把帧动画（双层 A/B 交叉淡入淡出）
 ---@param dt number
-local updateLogTimer_ = 0
 function M.Update(dt)
-    -- 每 2 秒输出一次帧动画状态
-    updateLogTimer_ = updateLogTimer_ + dt
-    if updateLogTimer_ >= 2.0 then
-        updateLogTimer_ = 0
-        DBG.Log("[StartPage] Update: vis=" .. tostring(M.IsVisible())
-            .. " A=" .. tostring(bgLayerA_ ~= nil)
-            .. " B=" .. tostring(bgLayerB_ ~= nil)
-            .. " fading=" .. tostring(frameFading_)
-            .. " t=" .. string.format("%.2f", frameTimer_)
-            .. " idx=" .. tostring(frameIndex_))
-    end
-
     if not startScreen_ or not M.IsVisible() then return end
     if not bgLayerA_ or not bgLayerB_ then return end
     if frameFading_ then return end  -- 淡入淡出进行中，等待完成
@@ -249,7 +214,6 @@ function M.Update(dt)
     -- 计算下一帧
     local nextIdx = frameIndex_ % FRAME_COUNT + 1
     local nextImage = EMBER_FRAMES[nextIdx]
-    DBG.Log("[StartPage] Switch: " .. frameIndex_ .. "->" .. nextIdx .. " " .. nextImage)
 
     -- B 层设置下一帧图片并淡入
     bgLayerB_:SetStyle({ backgroundImage = nextImage })
@@ -263,7 +227,6 @@ function M.Update(dt)
         easing   = "easeInOut",
         fillMode = "forwards",
         onComplete = function()
-            DBG.Log("[StartPage] FadeOK: idx=" .. nextIdx)
             -- 淡入完成：A 层换成当前帧图（瞬间），B 层归零
             if bgLayerA_ then
                 bgLayerA_:SetStyle({ backgroundImage = nextImage })

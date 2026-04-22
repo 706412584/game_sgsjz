@@ -484,21 +484,11 @@ end
 
 ---@param eventType string
 ---@param eventData UpdateEventData
-local updateDbgOnce_ = false
 function HandleUpdate(eventType, eventData)
     local dt = eventData["TimeStep"]:GetFloat()
 
-    if not updateDbgOnce_ then
-        updateDbgOnce_ = true
-        -- 直接写入调试面板，绕过 print hook
-        DebugLog.Log("[StartPage] HandleUpdate首次调用 Update=" .. tostring(StartPage.Update))
-    end
-
-    -- 开始界面火星动画（pcall 捕获错误）
-    local ok, err = pcall(StartPage.Update, dt)
-    if not ok and err then
-        DebugLog.Log("[StartPage] Update报错: " .. tostring(err))
-    end
+    -- 开始界面火把帧动画
+    StartPage.Update(dt)
 
     -- 区服列表重试轮询
     if isNetworkMode_ then
