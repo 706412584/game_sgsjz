@@ -106,7 +106,7 @@ local function createHeroCard(heroId, heroState)
     if not db then return nil end
 
     local level    = heroState and heroState.level or 1
-    local qColor   = Theme.QualityColor(db.quality)
+    local qColor   = Theme.QualityColor(db.quality + 1)
     local isSelected = (heroId == selectedHeroId_)
     local owned    = heroState ~= nil
 
@@ -286,7 +286,7 @@ local function buildDetailPanel(heroId, heroState)
 
     local level   = heroState and heroState.level or 1
     local owned   = heroState ~= nil
-    local qColor  = Theme.QualityColor(db.quality)
+    local qColor  = Theme.QualityColor(db.quality + 1)
     local fColor  = FACTION_COLORS[db.faction] or C.textDim
     local fName   = DH.FACTION_NAMES[db.faction] or "?"
     local qName   = DH.QUALITY_NAMES[db.quality] or "?"
