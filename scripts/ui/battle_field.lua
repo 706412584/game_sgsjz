@@ -1,6 +1,9 @@
 ------------------------------------------------------------
 -- ui/battle_field.lua  —— 战场武将卡牌组件
--- 创建、布局、状态更新武将卡牌 (110×150, absolute 定位)
+-- 布局: 敌我各一个 3×3 九宫格 (3列×3行=9格)
+-- 列: 后排=远端列, 前排=近端列, 中间列预留
+-- 行: 按单位数居中分配 (1人→行2, 2人→行1/3, 3人→行1/2/3)
+-- 卡片尺寸根据格子大小动态计算，确保不重叠
 ------------------------------------------------------------
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
@@ -10,13 +13,22 @@ local S     = Theme.sizes
 local M = {}
 
 ------------------------------------------------------------
--- 常量
+-- 布局常量
 ------------------------------------------------------------
-local CARD_W = 110
-local CARD_H = 150
-local AVATAR_SIZE = 90
-local HP_H   = 6
-local MOR_H  = 4
+local TOP_MARGIN = 58   -- 顶栏(54px) + padding
+local BOT_MARGIN = 55   -- 底部按钮区
+local CELL_PAD   = 4    -- 格子内边距
+
+-- 两侧区域在屏幕宽度中的范围 (比例)
+local ALLY_X0  = 0.02   -- 我方区域左边
+local ALLY_X1  = 0.46   -- 我方区域右边
+local ENEMY_X0 = 0.54   -- 敌方区域左边
+local ENEMY_X1 = 0.98   -- 敌方区域右边
+
+-- 最大卡片尺寸
+local MAX_CARD_W = 110
+local MAX_CARD_H = 140
+local AVATAR_RATIO = 0.62  -- 头像占卡片高度
 
 -- 状态效果中文映射
 local STATUS_NAMES = {
@@ -26,45 +38,60 @@ local STATUS_NAMES = {
 }
 
 ------------------------------------------------------------
--- 对称网格布局
--- 我方(左): 后排 x=0.13, 前排 x=0.29
--- 敌方(右): 前排 x=0.71, 后排 x=0.87  (镜像对称)
--- 纵向: 在顶栏(70px)和底部按钮(65px)之间均匀分布
-------------------------------------------------------------
-local TOP_MARGIN = 70   -- 顶栏54px + 余量
-local BOT_MARGIN = 65   -- 底部结果/加速按钮区
-
-local X_FRAC = {
-    ally_back   = 0.13,
-    ally_front  = 0.29,
-    enemy_front = 0.71,
-    enemy_back  = 0.87,
-}
-
---- 在安全区域内均匀分布 N 张卡牌的 Y 坐标 (返回 top 值数组)
-local function calcYSlots(count, pH)
-    local topY = TOP_MARGIN
-    local botY = pH - BOT_MARGIN - CARD_H
-    if botY < topY then botY = topY end
-    if count <= 0 then return {} end
-    if count == 1 then
-        return { math.floor((topY + botY) / 2) }
-    end
-    local slots = {}
-    local step = (botY - topY) / (count - 1)
-    for i = 1, count do
-        slots[i] = math.floor(topY + (i - 1) * step)
-    end
-    return slots
-end
-
-------------------------------------------------------------
 -- 内部状态
 ------------------------------------------------------------
-local container_     -- 父容器
-local unitCards_ = {} -- { [unitId] = { panel, hpBar, moraleBar, statusLabel, avatar, nameLabel, posX, posY } }
+local container_
+local unitCards_ = {}
 local panelW_, panelH_ = 0, 0
 local lastHighlight_ = nil
+local cardW_, cardH_, avatarSize_ = 100, 130, 78
+
+------------------------------------------------------------
+-- 九宫格计算
+------------------------------------------------------------
+
+--- 计算网格参数: 3列中心X, 3行中心Y, 格子宽高, 卡片尺寸
+local function calcGrid(pW, pH, x0Frac, x1Frac)
+    local x0 = math.floor(pW * x0Frac)
+    local x1 = math.floor(pW * x1Frac)
+    local y0 = TOP_MARGIN
+    local y1 = pH - BOT_MARGIN
+
+    local colW = (x1 - x0) / 3
+    local rowH = (y1 - y0) / 3
+
+    -- 3列中心X
+    local colCenters = {
+        x0 + colW * 0.5,
+        x0 + colW * 1.5,
+        x0 + colW * 2.5,
+    }
+    -- 3行中心Y
+    local rowCenters = {
+        y0 + rowH * 0.5,
+        y0 + rowH * 1.5,
+        y0 + rowH * 2.5,
+    }
+
+    -- 卡片尺寸 = 格子大小 - padding, 但不超过最大值
+    local cw = math.min(MAX_CARD_W, math.floor(colW - CELL_PAD * 2))
+    local ch = math.min(MAX_CARD_H, math.floor(rowH - CELL_PAD * 2))
+    -- 保持宽高比
+    if cw > ch * (MAX_CARD_W / MAX_CARD_H) then
+        cw = math.floor(ch * (MAX_CARD_W / MAX_CARD_H))
+    end
+    local av = math.floor(ch * AVATAR_RATIO)
+
+    return colCenters, rowCenters, cw, ch, av
+end
+
+--- N 个单位分配到 3 行 (居中分布), 返回行索引数组
+local function assignRows(count)
+    if count <= 0 then return {} end
+    if count == 1 then return { 2 } end          -- 中间行
+    if count == 2 then return { 1, 3 } end        -- 上下行
+    return { 1, 2, 3 }                            -- 全部行
+end
 
 ------------------------------------------------------------
 -- 创建单个卡牌
@@ -73,58 +100,58 @@ local function createCard(unit, side, posX, posY)
     local nameColor = side == "ally" and C.jade or C.red
     local hpColor   = side == "ally" and C.hp  or C.red
 
-    -- HP 条
+    local hpH  = math.max(4, math.floor(cardH_ * 0.04))
+    local morH = math.max(3, math.floor(cardH_ * 0.03))
+    local nameFontSize  = cardH_ < 100 and 8 or (cardH_ < 120 and 9 or 10)
+    local statusFontSize = cardH_ < 100 and 7 or (cardH_ < 120 and 8 or 9)
+
     local hpBar = UI.ProgressBar {
         value           = 1.0,
-        width           = CARD_W - 10,
-        height          = HP_H,
+        width           = cardW_ - 6,
+        height          = hpH,
         backgroundColor = { 20, 20, 20, 200 },
         borderRadius    = 2,
         fillColor       = hpColor,
         transition      = "value 0.3s easeOut",
     }
 
-    -- 士气条
     local moraleBar = UI.ProgressBar {
         value           = (unit.morale or 0) / 100,
-        width           = CARD_W - 10,
-        height          = MOR_H,
+        width           = cardW_ - 6,
+        height          = morH,
         backgroundColor = { 20, 20, 20, 200 },
         borderRadius    = 1,
         fillColor       = C.morale,
         transition      = "value 0.3s easeOut",
     }
 
-    -- 状态标签
     local statusLabel = UI.Label {
         text      = "",
-        fontSize  = 9,
+        fontSize  = statusFontSize,
         fontColor = C.gold,
         textAlign = "center",
-        width     = CARD_W,
+        width     = cardW_,
         maxLines  = 1,
     }
 
-    -- 名字标签
     local nameLabel = UI.Label {
-        text      = unit.name or "???",
-        fontSize  = 10,
-        fontColor = nameColor,
+        text       = unit.name or "???",
+        fontSize   = nameFontSize,
+        fontColor  = nameColor,
         fontWeight = "bold",
-        textAlign = "center",
-        width     = CARD_W,
-        maxLines  = 1,
+        textAlign  = "center",
+        width      = cardW_,
+        maxLines   = 1,
     }
 
-    -- 头像
     local imgPath = unit.heroId
         and ("Textures/heroes/hero_" .. unit.heroId .. ".png")
         or nil
 
     local avatar = UI.Panel {
-        width           = AVATAR_SIZE,
-        height          = AVATAR_SIZE,
-        borderRadius    = 8,
+        width           = avatarSize_,
+        height          = avatarSize_,
+        borderRadius    = 6,
         borderColor     = nameColor,
         borderWidth     = 2,
         backgroundImage = imgPath,
@@ -136,24 +163,23 @@ local function createCard(unit, side, posX, posY)
         children = (not imgPath) and {
             UI.Label {
                 text      = string.sub(unit.name or "?", 1, 6),
-                fontSize  = 12,
+                fontSize  = nameFontSize,
                 fontColor = C.text,
                 textAlign = "center",
             },
         } or {},
     }
 
-    -- 卡牌容器
     local card = UI.Panel {
-        position = "absolute",
-        left     = posX,
-        top      = posY,
-        width    = CARD_W,
-        height   = CARD_H,
+        position   = "absolute",
+        left       = posX,
+        top        = posY,
+        width      = cardW_,
+        height     = cardH_,
         alignItems = "center",
-        gap      = 2,
+        gap        = 1,
         transition = "opacity 0.3s easeOut",
-        children = {
+        children   = {
             avatar,
             nameLabel,
             hpBar,
@@ -163,31 +189,35 @@ local function createCard(unit, side, posX, posY)
     }
 
     unitCards_[unit.id] = {
-        panel      = card,
-        hpBar      = hpBar,
-        moraleBar  = moraleBar,
+        panel       = card,
+        hpBar       = hpBar,
+        moraleBar   = moraleBar,
         statusLabel = statusLabel,
-        avatar     = avatar,
-        nameLabel  = nameLabel,
-        posX       = posX,
-        posY       = posY,
+        avatar      = avatar,
+        nameLabel   = nameLabel,
+        posX        = posX,
+        posY        = posY,
     }
 
     return card
 end
 
 ------------------------------------------------------------
--- 布局一组单位
+-- 将一组单位放入指定列的格子中
+-- colCenter: 列中心X, rowCenters: 3行中心Y数组
 ------------------------------------------------------------
-local function layoutGroup(units, xFrac, pW, pH)
+local function placeUnitsInColumn(units, side, colCenter, rowCenters)
     local cards = {}
     local n = #units
-    local ySlots = calcYSlots(n, pH)
+    if n == 0 then return cards end
 
+    local rows = assignRows(n)
     for i, unit in ipairs(units) do
-        local posX = math.floor(xFrac * pW - CARD_W / 2)
-        local posY = ySlots[i] or math.floor(pH / 2 - CARD_H / 2)
-        cards[#cards + 1] = createCard(unit, unit.side, posX, posY)
+        if i > 3 then break end
+        local rowIdx = rows[i]
+        local posX = math.floor(colCenter - cardW_ / 2)
+        local posY = math.floor(rowCenters[rowIdx] - cardH_ / 2)
+        cards[#cards + 1] = createCard(unit, side, posX, posY)
     end
     return cards
 end
@@ -196,12 +226,6 @@ end
 -- 公开 API
 ------------------------------------------------------------
 
---- 创建所有武将卡牌并添加到容器
----@param parent table UI容器
----@param allies table[] BattleUnit[]
----@param enemies table[] BattleUnit[]
----@param pW number 面板宽度(像素)
----@param pH number 面板高度(像素)
 function M.Create(parent, allies, enemies, pW, pH)
     container_ = parent
     panelW_ = pW
@@ -209,32 +233,51 @@ function M.Create(parent, allies, enemies, pW, pH)
     unitCards_ = {}
     lastHighlight_ = nil
 
+    -- 计算我方九宫格
+    local aCols, aRows, aw, ah, aav = calcGrid(pW, pH, ALLY_X0, ALLY_X1)
+    -- 计算敌方九宫格
+    local eCols, eRows, ew, eh, eav = calcGrid(pW, pH, ENEMY_X0, ENEMY_X1)
+
+    -- 取两侧较小值作为统一卡片尺寸 (保持视觉一致)
+    cardW_      = math.min(aw, ew)
+    cardH_      = math.min(ah, eh)
+    avatarSize_ = math.min(aav, eav)
+
+    print(string.format(
+        "[BattleField] pW=%d pH=%d cardW=%d cardH=%d avatar=%d",
+        pW, pH, cardW_, cardH_, avatarSize_))
+
     -- 分前后排
     local allyFront, allyBack = {}, {}
     for _, u in ipairs(allies) do
         if u.row == "front" then allyFront[#allyFront + 1] = u
         else allyBack[#allyBack + 1] = u end
     end
-
     local enemyFront, enemyBack = {}, {}
     for _, u in ipairs(enemies) do
         if u.row == "front" then enemyFront[#enemyFront + 1] = u
         else enemyBack[#enemyBack + 1] = u end
     end
 
-    -- 布局并添加
-    local groups = {
-        { allyBack,   X_FRAC.ally_back },
-        { allyFront,  X_FRAC.ally_front },
-        { enemyFront, X_FRAC.enemy_front },
-        { enemyBack,  X_FRAC.enemy_back },
-    }
+    -- 我方九宫格:
+    --   列1(最左) = 后排, 列2(中) = 空, 列3(最右/靠中间) = 前排
+    local allyBackCards  = placeUnitsInColumn(allyBack,  "ally", aCols[1], aRows)
+    local allyFrontCards = placeUnitsInColumn(allyFront, "ally", aCols[3], aRows)
 
-    for _, g in ipairs(groups) do
-        local cards = layoutGroup(g[1], g[2], pW, pH)
-        for _, card in ipairs(cards) do
-            parent:AddChild(card)
-        end
+    -- 敌方九宫格 (镜像):
+    --   列1(最左/靠中间) = 前排, 列2(中) = 空, 列3(最右) = 后排
+    local enemyFrontCards = placeUnitsInColumn(enemyFront, "enemy", eCols[1], eRows)
+    local enemyBackCards  = placeUnitsInColumn(enemyBack,  "enemy", eCols[3], eRows)
+
+    -- 添加到容器
+    local allCards = {}
+    for _, c in ipairs(allyBackCards)   do allCards[#allCards + 1] = c end
+    for _, c in ipairs(allyFrontCards)  do allCards[#allCards + 1] = c end
+    for _, c in ipairs(enemyFrontCards) do allCards[#allCards + 1] = c end
+    for _, c in ipairs(enemyBackCards)  do allCards[#allCards + 1] = c end
+
+    for _, card in ipairs(allCards) do
+        parent:AddChild(card)
     end
 end
 
@@ -243,23 +286,19 @@ function M.UpdateUnit(unitId, hp, maxHp, morale, statuses, alive)
     local info = unitCards_[unitId]
     if not info then return end
 
-    -- HP
     if info.hpBar then
         local ratio = alive and math.max(0, hp / maxHp) or 0
         info.hpBar:SetValue(ratio)
     end
 
-    -- 士气
     if info.moraleBar then
         info.moraleBar:SetValue((morale or 0) / 100)
     end
 
-    -- 阵亡透明
     if not alive then
         info.panel:SetStyle({ opacity = 0.3 })
     end
 
-    -- 状态标签
     if info.statusLabel then
         if statuses and next(statuses) then
             local parts = {}
@@ -276,35 +315,28 @@ end
 
 --- 高亮当前行动者
 function M.HighlightUnit(unitId)
-    -- 取消上一个高亮
     if lastHighlight_ and unitCards_[lastHighlight_] then
         local prev = unitCards_[lastHighlight_]
         prev.avatar:SetStyle({ borderWidth = 2 })
     end
-
     local info = unitCards_[unitId]
     if info then
         info.avatar:SetStyle({ borderWidth = 4 })
-        -- 简单放大动画
         info.panel:Animate({
-            keyframes = {
-                { scale = 1.08 },
-                { scale = 1.0 },
-            },
-            duration = 0.3,
-            easing   = "easeOutBack",
+            keyframes = { { scale = 1.08 }, { scale = 1.0 } },
+            duration  = 0.3,
+            easing    = "easeOutBack",
         })
     end
-
     lastHighlight_ = unitId
 end
 
---- 获取单位卡牌中心位置 (相对容器)
+--- 获取单位卡牌中心位置
 function M.GetUnitPos(unitId)
     local info = unitCards_[unitId]
     if not info then return nil end
     return {
-        x = info.posX + CARD_W / 2,
+        x = info.posX + cardW_ / 2,
         y = info.posY,
     }
 end
