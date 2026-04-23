@@ -244,7 +244,7 @@ function M.UpdateUnit(unitId, hp, maxHp, morale, statuses, alive)
 
     -- 阵亡透明
     if not alive then
-        info.panel:SetStyle("opacity", 0.3)
+        info.panel:SetStyle({ opacity = 0.3 })
     end
 
     -- 状态标签
@@ -267,12 +267,12 @@ function M.HighlightUnit(unitId)
     -- 取消上一个高亮
     if lastHighlight_ and unitCards_[lastHighlight_] then
         local prev = unitCards_[lastHighlight_]
-        prev.avatar:SetStyle("borderWidth", 2)
+        prev.avatar:SetStyle({ borderWidth = 2 })
     end
 
     local info = unitCards_[unitId]
     if info then
-        info.avatar:SetStyle("borderWidth", 4)
+        info.avatar:SetStyle({ borderWidth = 4 })
         -- 简单放大动画
         info.panel:Animate({
             keyframes = {
