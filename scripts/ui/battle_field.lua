@@ -1,9 +1,8 @@
 ------------------------------------------------------------
--- ui/battle_field.lua  —— 战场武将卡牌组件
--- 布局: 以屏幕中线为轴，左右对称 4 列 × 3 行网格
---   我方后排 ← 我方前排 | 中线 | 敌方前排 → 敌方后排
--- 行: 按单位数居中 (1人→行2, 2人→行1/3, 3人→行1/2/3)
--- 卡片尺寸由行高动态决定，保证不重叠
+-- ui/battle_field.lua  —— 战场武将卡牌组件 (flex 布局版)
+-- 布局: 使用 flexDirection="row" + flexGrow spacer 实现对称 4 列
+--   [spacer] [后排] [spacer] [前排] [中线spacer] [前排] [spacer] [后排] [spacer]
+-- 卡牌是 flex 子元素，自动适配容器实际宽度（解决 safe area 偏移）
 -- 参考: 风云天下 — 卡牌铺满战场，结果按钮浮在上层
 ------------------------------------------------------------
 local UI    = require("urhox-libs/UI")
@@ -16,28 +15,19 @@ local M = {}
 ------------------------------------------------------------
 -- 布局常量
 ------------------------------------------------------------
--- 顶栏是 absolute 浮层(54px)，底部结果按钮也是 absolute 浮层
--- 参考风云天下: 卡牌铺满战场，按钮浮在上层，不需要大量预留
-local TOP_MARGIN = 56   -- 仅避开顶栏遮挡
-local BOT_MARGIN = 8    -- 底边最小留白(结果按钮浮层不占布局空间)
-local ROW_GAP    = 4    -- 行间最小间距
+local TOP_MARGIN = 54   -- 顶栏高度(52+2px线)
+local BOT_MARGIN = 4    -- 底边最小留白
 
--- 对称列位置: 以 0.50 为中线, 前排/后排各有固定偏移
-local CENTER       = 0.50
-local INNER_OFFSET = 0.13   -- 前排距中线
-local OUTER_OFFSET = 0.28   -- 后排距中线
-
--- 4 列中心 X (屏幕宽度比例), 完美对称
-local COL_X = {
-    ally_back   = CENTER - OUTER_OFFSET,   -- 0.22
-    ally_front  = CENTER - INNER_OFFSET,   -- 0.37
-    enemy_front = CENTER + INNER_OFFSET,   -- 0.63
-    enemy_back  = CENTER + OUTER_OFFSET,   -- 0.78
-}
+-- flex spacer 比例 (控制列的水平分布)
+-- 布局: [3] col [2] col [5] col [2] col [3]
+-- 即: 外侧留白3 | 后排列 | 间距2 | 前排列 | 中线5 | 前排列 | 间距2 | 后排列 | 外侧留白3
+local GROW_OUTER  = 3   -- 两端留白
+local GROW_INNER  = 2   -- 前后排之间间距
+local GROW_CENTER = 5   -- 中线间距
 
 -- 卡片尺寸上限
-local MAX_CARD_W = 120
-local MAX_CARD_H = 150
+local MAX_CARD_W  = 120
+local MAX_CARD_H  = 150
 local AVATAR_RATIO = 0.78   -- 头像占卡片高度比例
 
 -- 状态效果中文映射
@@ -52,27 +42,19 @@ local STATUS_NAMES = {
 ------------------------------------------------------------
 local container_
 local unitCards_ = {}
-local panelW_, panelH_ = 0, 0
 local lastHighlight_ = nil
 local cardW_, cardH_, avatarSize_ = 100, 130, 80
+local gridRow_   -- flexRow 容器引用, 用于估算位置
+local containerW_, containerH_ = 0, 0  -- 用于 GetUnitPos 估算
 
 ------------------------------------------------------------
--- 行位置计算: 3 行均匀分布在安全区
+-- 根据可用高度计算卡片尺寸
 ------------------------------------------------------------
-local function calcRowCenters(pH)
-    local y0 = TOP_MARGIN
-    local y1 = pH - BOT_MARGIN
-    local rowH = (y1 - y0) / 3
-    return {
-        y0 + rowH * 0.5,   -- 行1 中心
-        y0 + rowH * 1.5,   -- 行2 中心
-        y0 + rowH * 2.5,   -- 行3 中心
-    }, rowH
-end
-
---- 根据行高计算卡片尺寸
-local function calcCardSize(rowH)
-    local ch = math.min(MAX_CARD_H, math.floor(rowH - ROW_GAP))
+local function calcCardSize(availH)
+    -- 3行, 行间用 space-around 自动分配
+    -- 估算: 每行可用高度 ≈ availH / 3, 卡片取 90% 行高
+    local rowH = availH / 3
+    local ch = math.min(MAX_CARD_H, math.floor(rowH * 0.90))
     local cw = math.floor(ch * (MAX_CARD_W / MAX_CARD_H))
     cw = math.min(MAX_CARD_W, cw)
     local av = math.floor(ch * AVATAR_RATIO)
@@ -88,9 +70,9 @@ local function assignRows(count)
 end
 
 ------------------------------------------------------------
--- 创建单个卡牌
+-- 创建单个卡牌 (不再设 position=absolute)
 ------------------------------------------------------------
-local function createCard(unit, side, posX, posY)
+local function createCard(unit, side, colKey, rowIdx)
     local nameColor = side == "ally" and C.jade or C.red
     local hpColor   = side == "ally" and C.hp  or C.red
 
@@ -164,10 +146,8 @@ local function createCard(unit, side, posX, posY)
         } or {},
     }
 
+    -- 普通 flex 子元素, 不用 absolute
     local card = UI.Panel {
-        position   = "absolute",
-        left       = posX,
-        top        = posY,
         width      = cardW_,
         height     = cardH_,
         alignItems = "center",
@@ -189,36 +169,84 @@ local function createCard(unit, side, posX, posY)
         statusLabel = statusLabel,
         avatar      = avatar,
         nameLabel   = nameLabel,
-        posX        = posX,
-        posY        = posY,
+        colKey      = colKey,
+        rowIdx      = rowIdx,
     }
 
     return card
 end
 
 ------------------------------------------------------------
--- 将一组单位放入指定列
+-- 创建一列容器 (flex column, space-around 纵向分布)
+-- 用 3 个 slot: 仅占用需要的行, 空行放空 panel 占位
 ------------------------------------------------------------
-local function placeUnitsInColumn(units, side, colXFrac, rowCenters, pW)
-    local cards = {}
+local function createColumn(units, side, colKey)
     local n = #units
-    if n == 0 then return cards end
-
     local rows = assignRows(n)
-    local centerX = math.floor(colXFrac * pW)
 
+    -- 3 行 slot
+    local slots = { nil, nil, nil }
     for i, unit in ipairs(units) do
         if i > 3 then break end
         local rowIdx = rows[i]
-        local posX = math.floor(centerX - cardW_ / 2)
-        local posY = math.floor(rowCenters[rowIdx] - cardH_ / 2)
-        local posBottom = posY + cardH_
-        print(string.format(
-            "[BattleField] %s %s: col=%.2f row=%d posX=%d posY=%d bottom=%d (panelH=%.0f)",
-            side, unit.name or "?", colXFrac, rowIdx, posX, posY, posBottom, panelH_))
-        cards[#cards + 1] = createCard(unit, side, posX, posY)
+        slots[rowIdx] = createCard(unit, side, colKey, rowIdx)
     end
-    return cards
+
+    -- 构建 3 行子元素(空行用 flexGrow spacer 占位)
+    local children = {}
+    for r = 1, 3 do
+        if slots[r] then
+            children[#children + 1] = slots[r]
+        else
+            -- 空占位: 和卡片同高, 保持 3 行均匀
+            children[#children + 1] = UI.Panel {
+                width  = cardW_,
+                height = cardH_,
+            }
+        end
+    end
+
+    return UI.Panel {
+        width          = cardW_,
+        flexDirection  = "column",
+        justifyContent = "space-around",
+        alignItems     = "center",
+        children       = children,
+    }
+end
+
+--- 创建 flex spacer
+local function spacer(grow)
+    return UI.Panel { flexGrow = grow, flexBasis = 0 }
+end
+
+------------------------------------------------------------
+-- 估算列中心 X 位置 (给特效用)
+-- 基于 flexGrow 比例计算: total = 3+cw+2+cw+5+cw+2+cw+3 = 15 + 4*cw(归一化)
+------------------------------------------------------------
+local function estimateColCenterX(colKey, totalW)
+    -- spacer 总 grow = 3+2+5+2+3 = 15
+    -- 4 列各占 cardW_ 固定宽度
+    local fixedW = 4 * cardW_
+    local spacerW = math.max(0, totalW - fixedW)
+    local growUnit = spacerW / 15  -- 每单位 grow 对应的像素
+
+    -- 从左到右:
+    -- [grow=3 spacer] [allyBack col] [grow=2 spacer] [allyFront col] [grow=5 spacer] [enemyFront col] [grow=2 spacer] [enemyBack col] [grow=3 spacer]
+    local colCenters = {
+        ally_back   = GROW_OUTER * growUnit + cardW_ * 0.5,
+        ally_front  = GROW_OUTER * growUnit + cardW_ + GROW_INNER * growUnit + cardW_ * 0.5,
+        enemy_front = GROW_OUTER * growUnit + cardW_ + GROW_INNER * growUnit + cardW_ + GROW_CENTER * growUnit + cardW_ * 0.5,
+        enemy_back  = GROW_OUTER * growUnit + cardW_ + GROW_INNER * growUnit + cardW_ + GROW_CENTER * growUnit + cardW_ + GROW_INNER * growUnit + cardW_ * 0.5,
+    }
+    return colCenters[colKey] or (totalW * 0.5)
+end
+
+local function estimateRowCenterY(rowIdx, totalH)
+    -- 去除上下 margin, 3行 space-around 分布
+    local availH = totalH - TOP_MARGIN - BOT_MARGIN
+    -- space-around: 每行中心 = TOP_MARGIN + availH*(2*row-1)/6
+    return TOP_MARGIN + availH * (2 * rowIdx - 1) / 6
 end
 
 ------------------------------------------------------------
@@ -227,27 +255,21 @@ end
 
 function M.Create(parent, allies, enemies, pW, pH)
     container_ = parent
-    panelW_ = pW
-    panelH_ = pH
     unitCards_ = {}
     lastHighlight_ = nil
 
-    -- 计算 3 行中心 Y 和行高
-    local rowCenters, rowH = calcRowCenters(pH)
+    -- 用 SafeContentArea 获取实际可用宽度 (扣除 safe area insets)
+    local safeX, safeY, safeW, safeH = UI.GetSafeContentArea()
+    containerW_ = safeW    -- 实际容器宽度 (特效估算用)
+    containerH_ = pH       -- 高度不受 safe area 横向 insets 影响
 
-    -- 根据行高计算卡片尺寸
-    cardW_, cardH_, avatarSize_ = calcCardSize(rowH)
+    -- 可用高度 (减去顶栏和底部留白)
+    local availH = pH - TOP_MARGIN - BOT_MARGIN
+    cardW_, cardH_, avatarSize_ = calcCardSize(availH)
 
     print(string.format(
-        "[BattleField] pW=%.0f pH=%.0f rowH=%.0f cardW=%d cardH=%d avatar=%d TOP=%d BOT=%d",
-        pW, pH, rowH, cardW_, cardH_, avatarSize_, TOP_MARGIN, BOT_MARGIN))
-    print(string.format(
-        "[BattleField] 行中心Y: row1=%.0f row2=%.0f row3=%.0f  安全区=[%d ~ %.0f]",
-        rowCenters[1], rowCenters[2], rowCenters[3], TOP_MARGIN, pH - BOT_MARGIN))
-    print(string.format(
-        "[BattleField] 列中心X: ally_back=%.0f ally_front=%.0f | enemy_front=%.0f enemy_back=%.0f",
-        COL_X.ally_back * pW, COL_X.ally_front * pW,
-        COL_X.enemy_front * pW, COL_X.enemy_back * pW))
+        "[BattleField] screenW=%.0f safeW=%.0f pH=%.0f availH=%.0f cardW=%d cardH=%d avatar=%d",
+        pW, safeW, pH, availH, cardW_, cardH_, avatarSize_))
 
     -- 分前后排
     local allyFront, allyBack = {}, {}
@@ -261,23 +283,38 @@ function M.Create(parent, allies, enemies, pW, pH)
         else enemyBack[#enemyBack + 1] = u end
     end
 
-    -- 布局 4 列 (对称)
-    local allCards = {}
-    local groups = {
-        { allyBack,   COL_X.ally_back },
-        { allyFront,  COL_X.ally_front },
-        { enemyFront, COL_X.enemy_front },
-        { enemyBack,  COL_X.enemy_back },
-    }
-    for _, g in ipairs(groups) do
-        local side = (g[2] < CENTER) and "ally" or "enemy"
-        local cards = placeUnitsInColumn(g[1], side, g[2], rowCenters, pW)
-        for _, c in ipairs(cards) do allCards[#allCards + 1] = c end
-    end
+    print(string.format(
+        "[BattleField] 单位数: allyBack=%d allyFront=%d | enemyFront=%d enemyBack=%d",
+        #allyBack, #allyFront, #enemyFront, #enemyBack))
 
-    for _, card in ipairs(allCards) do
-        parent:AddChild(card)
-    end
+    -- 构建 4 列
+    local colAllyBack   = createColumn(allyBack,   "ally",  "ally_back")
+    local colAllyFront  = createColumn(allyFront,  "ally",  "ally_front")
+    local colEnemyFront = createColumn(enemyFront, "enemy", "enemy_front")
+    local colEnemyBack  = createColumn(enemyBack,  "enemy", "enemy_back")
+
+    -- flex row 容器: spacer + col + spacer + col + center spacer + col + spacer + col + spacer
+    gridRow_ = UI.Panel {
+        width          = "100%",
+        height         = "100%",
+        paddingTop     = TOP_MARGIN,
+        paddingBottom  = BOT_MARGIN,
+        flexDirection  = "row",
+        alignItems     = "stretch",
+        children       = {
+            spacer(GROW_OUTER),     -- 左侧留白
+            colAllyBack,            -- 我方后排
+            spacer(GROW_INNER),     -- 后排-前排间距
+            colAllyFront,           -- 我方前排
+            spacer(GROW_CENTER),    -- 中线留白
+            colEnemyFront,          -- 敌方前排
+            spacer(GROW_INNER),     -- 前排-后排间距
+            colEnemyBack,           -- 敌方后排
+            spacer(GROW_OUTER),     -- 右侧留白
+        },
+    }
+
+    parent:AddChild(gridRow_)
 end
 
 --- 更新单位状态
@@ -330,14 +367,15 @@ function M.HighlightUnit(unitId)
     lastHighlight_ = unitId
 end
 
---- 获取单位卡牌中心位置
+--- 获取单位卡牌中心位置 (估算, 供特效定位)
 function M.GetUnitPos(unitId)
     local info = unitCards_[unitId]
     if not info then return nil end
-    return {
-        x = info.posX + cardW_ / 2,
-        y = info.posY,
-    }
+
+    -- 用 flex 比例估算 — 特效浮动文字近似即可
+    local x = estimateColCenterX(info.colKey, containerW_)
+    local y = estimateRowCenterY(info.rowIdx, containerH_)
+    return { x = x, y = y }
 end
 
 --- 通过名字查找 unitId
@@ -355,6 +393,7 @@ function M.Clear()
     unitCards_ = {}
     lastHighlight_ = nil
     container_ = nil
+    gridRow_ = nil
 end
 
 return M
