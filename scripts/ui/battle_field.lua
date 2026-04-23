@@ -244,7 +244,7 @@ function M.Create(parent, allies, enemies, pW, pH)
     avatarSize_ = math.min(aav, eav)
 
     print(string.format(
-        "[BattleField] pW=%d pH=%d cardW=%d cardH=%d avatar=%d",
+        "[BattleField] pW=%.0f pH=%.0f cardW=%d cardH=%d avatar=%d",
         pW, pH, cardW_, cardH_, avatarSize_))
 
     -- 分前后排
