@@ -1,6 +1,7 @@
 ------------------------------------------------------------
 -- ui/page_battle.lua  —— 三国神将录 全屏可视化战斗回放
 -- 风云天下风格: 顶栏双方指挥官信息 + 战场卡牌 + 底部结果/加速
+-- 使用 unitState_ 影子状态跟踪中间 HP，避免一开始就显示最终结果
 ------------------------------------------------------------
 local UI     = require("urhox-libs/UI")
 local Theme  = require("ui.theme")
@@ -36,21 +37,43 @@ local onBattleEnd_
 local unitByName_ = {}
 local unitById_   = {}
 
+-- 影子状态: 跟踪回放过程中的中间 HP / alive / statuses
+-- 初始值 = 满血满活, 随 action 逐步扣减
+local unitState_ = {}  -- { [id] = { hp, maxHp, morale, alive, statuses } }
+
 -- 顶栏兵力条
 local allyHpBar_, enemyHpBar_
 local allyTotalMaxHp_, enemyTotalMaxHp_
-local allyFinalRatio_, enemyFinalRatio_
-local totalRounds_
 
 ------------------------------------------------------------
--- 顶栏兵力条 — 按回合进度线性插值
+-- 顶栏兵力条 — 根据影子状态实时聚合
 ------------------------------------------------------------
 local function updateTopBarHp()
     if not allyHpBar_ or not enemyHpBar_ then return end
-    if totalRounds_ <= 0 then return end
-    local progress = math.min(1, currentRound_ / totalRounds_)
-    allyHpBar_:SetValue(math.max(0, 1.0 - (1.0 - allyFinalRatio_) * progress))
-    enemyHpBar_:SetValue(math.max(0, 1.0 - (1.0 - enemyFinalRatio_) * progress))
+    local allyHp, enemyHp = 0, 0
+    for _, u in ipairs(battleLog_.allies or {}) do
+        local st = unitState_[u.id]
+        if st and st.alive then
+            allyHp = allyHp + math.max(0, st.hp)
+        end
+    end
+    for _, u in ipairs(battleLog_.enemies or {}) do
+        local st = unitState_[u.id]
+        if st and st.alive then
+            enemyHp = enemyHp + math.max(0, st.hp)
+        end
+    end
+    allyHpBar_:SetValue(allyTotalMaxHp_ > 0 and (allyHp / allyTotalMaxHp_) or 0)
+    enemyHpBar_:SetValue(enemyTotalMaxHp_ > 0 and (enemyHp / enemyTotalMaxHp_) or 0)
+end
+
+------------------------------------------------------------
+-- 同步所有单位 UI (用影子状态)
+------------------------------------------------------------
+local function syncAllUnits()
+    for id, st in pairs(unitState_) do
+        BField.UpdateUnit(id, st.hp, st.maxHp, st.morale, st.statuses, st.alive)
+    end
 end
 
 ------------------------------------------------------------
@@ -76,56 +99,87 @@ local function showActionEffects(action)
         local tUnit = unitByName_[tName]
         if tUnit then
             local tId = tUnit.id
+            local st  = unitState_[tId]
             local pos = BField.GetUnitPos(tId)
+
+            -- 扣血
             local dmg = damages[i] or 0
-            if dmg > 0 and pos then
-                local ox = math.random(-15, 15)
-                local oy = math.random(-10, 5)
-                BFX.ShowDamage(pos.x + ox, pos.y + oy, dmg, isCrit[i])
+            if dmg > 0 then
+                if pos then
+                    local ox = math.random(-15, 15)
+                    local oy = math.random(-10, 5)
+                    BFX.ShowDamage(pos.x + ox, pos.y + oy, dmg, isCrit[i])
+                end
+                if st then st.hp = math.max(0, st.hp - dmg) end
             end
+
+            -- 治疗
             local heal = heals[i] or 0
-            if heal > 0 and pos then
-                BFX.ShowHeal(pos.x, pos.y - 10, heal)
+            if heal > 0 then
+                if pos then BFX.ShowHeal(pos.x, pos.y - 10, heal) end
+                if st then st.hp = math.min(st.maxHp, st.hp + heal) end
             end
-            if killed[i] and pos then
-                BFX.ShowKill(pos.x, pos.y + 20, tName)
+
+            -- 击杀
+            if killed[i] then
+                if pos then BFX.ShowKill(pos.x, pos.y + 20, tName) end
+                if st then st.alive = false; st.hp = 0 end
             end
-            BField.UpdateUnit(tId, tUnit.hp, tUnit.maxHp,
-                tUnit.morale, tUnit.statuses, tUnit.alive)
+
+            -- 更新卡牌 UI (用影子状态)
+            if st then
+                BField.UpdateUnit(tId, st.hp, st.maxHp,
+                    st.morale, st.statuses, st.alive)
+            end
         end
     end
 
+    -- 状态效果
     if action.statuses then
-        for _, st in ipairs(action.statuses) do
-            local sUnit = unitByName_[st.target]
+        for _, stInfo in ipairs(action.statuses) do
+            local sUnit = unitByName_[stInfo.target]
             if sUnit then
                 local pos = BField.GetUnitPos(sUnit.id)
                 if pos then
                     BFX.ShowStatus(pos.x, pos.y + 15,
-                        STATUS_NAMES[st.status] or st.status)
+                        STATUS_NAMES[stInfo.status] or stInfo.status)
+                end
+                local st = unitState_[sUnit.id]
+                if st then
+                    st.statuses[stInfo.status] = { dur = stInfo.dur or 1 }
                 end
             end
         end
     end
+
+    updateTopBarHp()
 end
 
 local function showStatusTick(tick)
     local tUnit = unitByName_[tick.target]
     if not tUnit then return end
-    local pos = BField.GetUnitPos(tUnit.id)
+    local tId = tUnit.id
+    local st  = unitState_[tId]
+    local pos = BField.GetUnitPos(tId)
+
     if tick.type == "burn_tick" and pos then
         BFX.ShowDamage(pos.x, pos.y, tick.damage or 0, false)
+        if st then
+            st.hp = math.max(0, st.hp - (tick.damage or 0))
+            if st.hp <= 0 then st.alive = false end
+        end
     elseif tick.type == "hot_tick" and pos then
         BFX.ShowHeal(pos.x, pos.y, tick.heal or 0)
+        if st then
+            st.hp = math.min(st.maxHp, st.hp + (tick.heal or 0))
+        end
     end
-    BField.UpdateUnit(tUnit.id, tUnit.hp, tUnit.maxHp,
-        tUnit.morale, tUnit.statuses, tUnit.alive)
-end
 
-local function syncAllUnits()
-    for _, u in pairs(unitById_) do
-        BField.UpdateUnit(u.id, u.hp, u.maxHp, u.morale, u.statuses, u.alive)
+    if st then
+        BField.UpdateUnit(tId, st.hp, st.maxHp,
+            st.morale, st.statuses, st.alive)
     end
+    updateTopBarHp()
 end
 
 ------------------------------------------------------------
@@ -134,9 +188,25 @@ end
 local function skipToEnd()
     if not battleLog_ then return end
     playing_ = false
+
+    -- 将影子状态设为最终状态
+    for _, u in ipairs(battleLog_.allies or {}) do
+        local st = unitState_[u.id]
+        if st then
+            st.hp = u.hp; st.alive = u.alive
+            st.morale = u.morale or 0; st.statuses = u.statuses or {}
+        end
+    end
+    for _, u in ipairs(battleLog_.enemies or {}) do
+        local st = unitState_[u.id]
+        if st then
+            st.hp = u.hp; st.alive = u.alive
+            st.morale = u.morale or 0; st.statuses = u.statuses or {}
+        end
+    end
+
     syncAllUnits()
-    if allyHpBar_ then allyHpBar_:SetValue(allyFinalRatio_) end
-    if enemyHpBar_ then enemyHpBar_:SetValue(enemyFinalRatio_) end
+    updateTopBarHp()
     if roundLabel_ then roundLabel_.text = "战斗结束" end
     if battleLog_.result then
         Modal.BattleResult(battleLog_.result, onBattleEnd_)
@@ -230,23 +300,30 @@ function M.Create(log, callbacks)
         unitById_[u.id] = u
     end
 
-    -- 兵力统计 (用于顶栏 HP 条插值)
+    -- 影子状态: 全员满血开始
+    unitState_ = {}
     allyTotalMaxHp_  = 0
     enemyTotalMaxHp_ = 0
-    local allyFinalHp, enemyFinalHp = 0, 0
     for _, u in ipairs(log.allies or {}) do
+        unitState_[u.id] = {
+            hp       = u.maxHp,
+            maxHp    = u.maxHp,
+            morale   = 0,
+            alive    = true,
+            statuses = {},
+        }
         allyTotalMaxHp_ = allyTotalMaxHp_ + (u.maxHp or 0)
-        if u.alive then allyFinalHp = allyFinalHp + math.max(0, u.hp or 0) end
     end
     for _, u in ipairs(log.enemies or {}) do
+        unitState_[u.id] = {
+            hp       = u.maxHp,
+            maxHp    = u.maxHp,
+            morale   = 0,
+            alive    = true,
+            statuses = {},
+        }
         enemyTotalMaxHp_ = enemyTotalMaxHp_ + (u.maxHp or 0)
-        if u.alive then enemyFinalHp = enemyFinalHp + math.max(0, u.hp or 0) end
     end
-    allyFinalRatio_  = allyTotalMaxHp_  > 0
-        and (allyFinalHp / allyTotalMaxHp_) or 0
-    enemyFinalRatio_ = enemyTotalMaxHp_ > 0
-        and (enemyFinalHp / enemyTotalMaxHp_) or 0
-    totalRounds_ = log.totalRounds or #(log.rounds or {})
 
     -- 自订阅 Update
     SubscribeToEvent("Update", "HandleBattleFrameUpdate")
@@ -431,8 +508,17 @@ function M.Update(dt)
         if currentRound_ > #rounds then
             playing_ = false
             if roundLabel_ then roundLabel_.text = "战斗结束" end
-            if allyHpBar_ then allyHpBar_:SetValue(allyFinalRatio_) end
-            if enemyHpBar_ then enemyHpBar_:SetValue(enemyFinalRatio_) end
+            -- 设为最终状态
+            for _, u in ipairs(battleLog_.allies or {}) do
+                local st = unitState_[u.id]
+                if st then st.hp = u.hp; st.alive = u.alive end
+            end
+            for _, u in ipairs(battleLog_.enemies or {}) do
+                local st = unitState_[u.id]
+                if st then st.hp = u.hp; st.alive = u.alive end
+            end
+            syncAllUnits()
+            updateTopBarHp()
             if battleLog_.result then
                 Modal.BattleResult(battleLog_.result, onBattleEnd_)
             end
@@ -442,8 +528,6 @@ function M.Update(dt)
         if roundLabel_ then
             roundLabel_.text = "第 " .. currentRound_ .. " / " .. #rounds .. " 回合"
         end
-        syncAllUnits()
-        updateTopBarHp()
     end
 
     local round = rounds[currentRound_]

@@ -26,24 +26,37 @@ local STATUS_NAMES = {
 }
 
 ------------------------------------------------------------
--- 分数坐标布局
--- 我方(左): 后排 x=0.10, 前排 x=0.28
--- 敌方(右): 前排 x=0.60, 后排 x=0.78
+-- 对称网格布局
+-- 我方(左): 后排 x=0.13, 前排 x=0.29
+-- 敌方(右): 前排 x=0.71, 后排 x=0.87  (镜像对称)
+-- 纵向: 在顶栏(70px)和底部按钮(65px)之间均匀分布
 ------------------------------------------------------------
-local Y_POS = {
-    [1] = { 0.50 },
-    [2] = { 0.33, 0.67 },
-    [3] = { 0.20, 0.50, 0.80 },
-    [4] = { 0.16, 0.38, 0.60, 0.82 },
-    [5] = { 0.14, 0.32, 0.50, 0.68, 0.86 },
-}
+local TOP_MARGIN = 70   -- 顶栏54px + 余量
+local BOT_MARGIN = 65   -- 底部结果/加速按钮区
 
 local X_FRAC = {
-    ally_back  = 0.10,
-    ally_front = 0.27,
-    enemy_front = 0.61,
-    enemy_back  = 0.78,
+    ally_back   = 0.13,
+    ally_front  = 0.29,
+    enemy_front = 0.71,
+    enemy_back  = 0.87,
 }
+
+--- 在安全区域内均匀分布 N 张卡牌的 Y 坐标 (返回 top 值数组)
+local function calcYSlots(count, pH)
+    local topY = TOP_MARGIN
+    local botY = pH - BOT_MARGIN - CARD_H
+    if botY < topY then botY = topY end
+    if count <= 0 then return {} end
+    if count == 1 then
+        return { math.floor((topY + botY) / 2) }
+    end
+    local slots = {}
+    local step = (botY - topY) / (count - 1)
+    for i = 1, count do
+        slots[i] = math.floor(topY + (i - 1) * step)
+    end
+    return slots
+end
 
 ------------------------------------------------------------
 -- 内部状态
@@ -169,12 +182,11 @@ end
 local function layoutGroup(units, xFrac, pW, pH)
     local cards = {}
     local n = #units
-    local ySlots = Y_POS[n] or Y_POS[math.min(n, 5)]
+    local ySlots = calcYSlots(n, pH)
 
     for i, unit in ipairs(units) do
-        local fracY = ySlots[i] or (0.5)
         local posX = math.floor(xFrac * pW - CARD_W / 2)
-        local posY = math.floor(fracY * pH - CARD_H / 2)
+        local posY = ySlots[i] or math.floor(pH / 2 - CARD_H / 2)
         cards[#cards + 1] = createCard(unit, unit.side, posX, posY)
     end
     return cards
