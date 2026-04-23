@@ -34,9 +34,13 @@ local dragStartX_ = 0
 local dragStartY_ = 0
 local dragLastX_ = 0
 local dragLastY_ = 0
-local bubbleX_ = nil
+local bubbleX_ = 6       -- 默认左上角
 local bubbleY_ = 30
 local DRAG_THRESHOLD = 8
+
+-- 展开面板位置(跟随气泡)
+local panelX_ = nil
+local panelY_ = nil
 
 -- Tag 过滤
 local allTags_ = {}
@@ -45,7 +49,7 @@ local tagBtns_ = {}
 local showAll_ = false          -- 默认只显示项目标签
 
 -- 项目默认显示的标签
-local PROJECT_TAGS = { StartPage = true, DebugLog = true }
+local PROJECT_TAGS = { StartPage = true, DebugLog = true, FMT = true }
 
 -- ========== 工具函数 ==========
 
@@ -141,7 +145,26 @@ local function ensureTag(tag)
     createTagBtn(tag)
 end
 
+-- 前置声明
+local moveBubbleTo
+
 -- ========== 最小化/最大化 ==========
+
+--- 根据气泡位置计算面板展开位置
+local function updatePanelPosition()
+    if not panel_ then return end
+    local dpr = graphics:GetDPR()
+    local screenW = graphics:GetWidth() / dpr
+    local screenH = graphics:GetHeight() / dpr
+    -- 面板左上角 = 气泡位置,但不能超出屏幕
+    local px = math.max(0, math.min(bubbleX_, screenW - PANEL_WIDTH))
+    local py = math.max(0, math.min(bubbleY_, screenH - PANEL_HEIGHT))
+    panelX_ = px
+    panelY_ = py
+    -- 清除 right 定位, 改用 left/top
+    YGNodeStyleSetPosition(panel_.node, YGEdgeRight, YGUndefined)
+    panel_:SetStyle({ left = panelX_, top = panelY_ })
+end
 
 local function switchToMinimized()
     minimized_ = true
@@ -153,6 +176,8 @@ local function switchToMinimized()
     if bubble_ then
         bubble_:SetVisible(true)
         YGNodeStyleSetDisplay(bubble_.node, YGDisplayFlex)
+        -- 确保气泡在已记录的位置
+        moveBubbleTo(bubbleX_, bubbleY_)
         refreshBubbleText()
     end
 end
@@ -161,6 +186,7 @@ local function switchToMaximized()
     minimized_ = false
     if titleLabel_ then titleLabel_:SetText("[-]") end
     if panel_ then
+        updatePanelPosition()
         panel_:SetVisible(true)
         YGNodeStyleSetDisplay(panel_.node, YGDisplayFlex)
         refreshDisplay()
@@ -185,14 +211,10 @@ local function getInputPos()
 end
 
 local function ensureBubbleX()
-    if bubbleX_ == nil then
-        local dpr = graphics:GetDPR()
-        local screenW = graphics:GetWidth() / dpr
-        bubbleX_ = screenW - BUBBLE_SIZE - 6
-    end
+    -- bubbleX_ 已有默认值(6=左上角), 无需再初始化
 end
 
-local function moveBubbleTo(lx, ly)
+moveBubbleTo = function(lx, ly)
     local dpr = graphics:GetDPR()
     local screenW = graphics:GetWidth() / dpr
     local screenH = graphics:GetHeight() / dpr
@@ -280,7 +302,7 @@ local function createBubble()
         pointerEvents = "none",
     }
     bubble_ = UI.Panel {
-        position = "absolute", right = 6, top = bubbleY_,
+        position = "absolute", left = bubbleX_, top = bubbleY_,
         width = BUBBLE_SIZE, height = BUBBLE_SIZE, zIndex = 1000,
         backgroundColor = { 0, 0, 0, 200 },
         borderWidth = 2, borderColor = { 0, 200, 0, 200 },
@@ -381,7 +403,7 @@ local function createPanel()
         },
     }
     panel_ = UI.Panel {
-        position = "absolute", right = 8, top = 30,
+        position = "absolute", left = 6, top = 30,
         width = PANEL_WIDTH, height = PANEL_HEIGHT, zIndex = 999,
         backgroundColor = { 0, 0, 0, 190 },
         borderWidth = 1, borderColor = { 0, 255, 0, 150 },
@@ -432,8 +454,10 @@ function M.Disable()
     minimized_ = false
     dragging_ = false
     dragReady_ = false
-    bubbleX_ = nil
+    bubbleX_ = 6
     bubbleY_ = 30
+    panelX_ = nil
+    panelY_ = nil
 end
 
 function M.IsEnabled() return enabled_ end

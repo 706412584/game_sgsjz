@@ -71,8 +71,8 @@ local function switchPage(pageId)
         local backBar = UI.Panel {
             width          = "100%",
             flexDirection  = "row",
-            justifyContent = "flex-end",
-            paddingRight   = 15,
+            justifyContent = "flex-start",
+            paddingLeft    = 15,
             paddingTop     = 6,
             paddingBottom  = 4,
             children = {
@@ -337,8 +337,12 @@ local function handleGameEvt(evtType, data)
     if evtType == "battle_result" then
         -- 收到战斗结果: 显示战斗回放
         local log = {
+            allies      = data.allies or {},
+            enemies     = data.enemies or {},
             rounds      = data.rounds or {},
             totalRounds = data.totalRounds or 0,
+            map_id      = data.mapId,
+            node_id     = data.nodeId,
             result = {
                 win         = data.win,
                 stars       = data.stars,

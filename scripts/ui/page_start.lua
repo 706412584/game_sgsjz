@@ -119,9 +119,9 @@ function M.Create(onEnter)
     local serverBg = UI.Panel {
         alignItems        = "center",
         justifyContent    = "center",
-        paddingHorizontal = 16,
-        paddingVertical   = 6,
-        borderRadius      = 16,
+        paddingHorizontal = 24,
+        paddingVertical   = 10,
+        borderRadius      = 20,
         backgroundColor   = { C.bg[1], C.bg[2], C.bg[3], 180 },
         borderColor       = C.border,
         borderWidth       = 1,
@@ -129,8 +129,8 @@ function M.Create(onEnter)
     }
 
     enterBtn_ = UI.Panel {
-        width          = 220,
-        height         = 62,
+        width          = 300,
+        height         = 80,
         alignItems     = "center",
         justifyContent = "center",
         opacity        = 0.4,
@@ -140,8 +140,8 @@ function M.Create(onEnter)
             UI.Panel {
                 backgroundImage = "image/btn_enter_20260421153715.png",
                 backgroundFit   = "contain",
-                width           = 220,
-                height          = 62,
+                width           = 300,
+                height          = 80,
                 pointerEvents   = "none",
             },
         },
@@ -153,19 +153,24 @@ function M.Create(onEnter)
 
     contentPanel:AddChild(UI.Panel {
         width        = "85%",
-        maxWidth     = 340,
+        maxWidth     = 400,
         alignItems   = "center",
-        marginBottom = 60,
-        gap          = 16,
+        marginBottom = 25,
+        gap          = 20,
         children = {
             serverBg,
             enterBtn_,
-            UI.Label {
-                text      = "v1.0.0",
-                fontSize  = 10,
-                fontColor = { C.textDim[1], C.textDim[2], C.textDim[3], 120 },
-            },
         },
+    })
+
+    -- 版本号：右下角绝对定位
+    contentPanel:AddChild(UI.Label {
+        text      = "v1.0.0",
+        fontSize  = 10,
+        fontColor = { C.textDim[1], C.textDim[2], C.textDim[3], 120 },
+        position  = "absolute",
+        right     = 15,
+        bottom    = 15,
     })
 
     startScreen_:AddChild(contentPanel)

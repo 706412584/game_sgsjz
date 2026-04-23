@@ -393,6 +393,29 @@ ACTION_HANDLERS["battle"] = function(userId, params)
 
     dirty_[userId] = true
 
+    -- 提取可序列化的单位摘要(供客户端 UI 展示)
+    local function summarizeUnits(units)
+        local out = {}
+        for _, u in ipairs(units or {}) do
+            out[#out + 1] = {
+                id     = u.id,
+                name   = u.name,
+                heroId = u.heroId,
+                side   = u.side,
+                row    = u.row,
+                tong   = u.tong,
+                yong   = u.yong,
+                zhi    = u.zhi,
+                hp     = u.hp,
+                maxHp  = u.maxHp,
+                morale = u.morale or 0,
+                level  = u.level,
+                alive  = u.alive,
+            }
+        end
+        return out
+    end
+
     -- 推送战斗结果事件
     sendEvt(userId, "battle_result", {
         win          = battleLog.result.win,
@@ -404,6 +427,8 @@ ACTION_HANDLERS["battle"] = function(userId, params)
         allyAlive    = battleLog.result.allyAlive,
         enemyAlive   = battleLog.result.enemyAlive,
         drops        = battleLog.result.drops,
+        allies       = summarizeUnits(battleLog.allies),
+        enemies      = summarizeUnits(battleLog.enemies),
         rewards      = rewards,
         mapId        = mapId,
         nodeId       = nodeId,
