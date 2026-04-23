@@ -4,6 +4,7 @@
 --   我方后排 ← 我方前排 | 中线 | 敌方前排 → 敌方后排
 -- 行: 按单位数居中 (1人→行2, 2人→行1/3, 3人→行1/2/3)
 -- 卡片尺寸由行高动态决定，保证不重叠
+-- 参考: 风云天下 — 卡牌铺满战场，结果按钮浮在上层
 ------------------------------------------------------------
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
@@ -15,27 +16,29 @@ local M = {}
 ------------------------------------------------------------
 -- 布局常量
 ------------------------------------------------------------
-local TOP_MARGIN = 58   -- 顶栏(54px) + 余量
-local BOT_MARGIN = 70   -- 底部按钮区(bottom=12+height=50=62px) + 余量
-local ROW_GAP    = 6    -- 行间最小间距
+-- 顶栏是 absolute 浮层(54px)，底部结果按钮也是 absolute 浮层
+-- 参考风云天下: 卡牌铺满战场，按钮浮在上层，不需要大量预留
+local TOP_MARGIN = 56   -- 仅避开顶栏遮挡
+local BOT_MARGIN = 8    -- 底边最小留白(结果按钮浮层不占布局空间)
+local ROW_GAP    = 4    -- 行间最小间距
 
 -- 对称列位置: 以 0.50 为中线, 前排/后排各有固定偏移
 local CENTER       = 0.50
-local INNER_OFFSET = 0.12   -- 前排距中线
-local OUTER_OFFSET = 0.27   -- 后排距中线
+local INNER_OFFSET = 0.13   -- 前排距中线
+local OUTER_OFFSET = 0.28   -- 后排距中线
 
 -- 4 列中心 X (屏幕宽度比例), 完美对称
 local COL_X = {
-    ally_back   = CENTER - OUTER_OFFSET,   -- 0.23
-    ally_front  = CENTER - INNER_OFFSET,   -- 0.38
-    enemy_front = CENTER + INNER_OFFSET,   -- 0.62
-    enemy_back  = CENTER + OUTER_OFFSET,   -- 0.77
+    ally_back   = CENTER - OUTER_OFFSET,   -- 0.22
+    ally_front  = CENTER - INNER_OFFSET,   -- 0.37
+    enemy_front = CENTER + INNER_OFFSET,   -- 0.63
+    enemy_back  = CENTER + OUTER_OFFSET,   -- 0.78
 }
 
 -- 卡片尺寸上限
-local MAX_CARD_W = 110
-local MAX_CARD_H = 145
-local AVATAR_RATIO = 0.70   -- 头像占卡片高度比例 (放大)
+local MAX_CARD_W = 120
+local MAX_CARD_H = 150
+local AVATAR_RATIO = 0.78   -- 头像占卡片高度比例
 
 -- 状态效果中文映射
 local STATUS_NAMES = {
@@ -91,14 +94,14 @@ local function createCard(unit, side, posX, posY)
     local nameColor = side == "ally" and C.jade or C.red
     local hpColor   = side == "ally" and C.hp  or C.red
 
-    local hpH  = math.max(4, math.floor(cardH_ * 0.045))
+    local hpH  = math.max(5, math.floor(cardH_ * 0.05))
     local morH = math.max(3, math.floor(cardH_ * 0.03))
-    local nameFontSize   = cardH_ < 100 and 8 or (cardH_ < 120 and 9 or 10)
-    local statusFontSize = cardH_ < 100 and 7 or (cardH_ < 120 and 8 or 9)
+    local nameFontSize   = cardH_ < 80 and 8 or (cardH_ < 100 and 9 or 10)
+    local statusFontSize = cardH_ < 80 and 7 or (cardH_ < 100 and 8 or 9)
 
     local hpBar = UI.ProgressBar {
         value           = 1.0,
-        width           = cardW_ - 6,
+        width           = avatarSize_,
         height          = hpH,
         backgroundColor = { 20, 20, 20, 200 },
         borderRadius    = 2,
@@ -108,7 +111,7 @@ local function createCard(unit, side, posX, posY)
 
     local moraleBar = UI.ProgressBar {
         value           = (unit.morale or 0) / 100,
-        width           = cardW_ - 6,
+        width           = avatarSize_,
         height          = morH,
         backgroundColor = { 20, 20, 20, 200 },
         borderRadius    = 1,
@@ -211,8 +214,8 @@ local function placeUnitsInColumn(units, side, colXFrac, rowCenters, pW)
         local posY = math.floor(rowCenters[rowIdx] - cardH_ / 2)
         local posBottom = posY + cardH_
         print(string.format(
-            "[BattleField] %s %s: col=%.2f row=%d posX=%d posY=%d bottom=%d",
-            side, unit.name or "?", colXFrac, rowIdx, posX, posY, posBottom))
+            "[BattleField] %s %s: col=%.2f row=%d posX=%d posY=%d bottom=%d (panelH=%.0f)",
+            side, unit.name or "?", colXFrac, rowIdx, posX, posY, posBottom, panelH_))
         cards[#cards + 1] = createCard(unit, side, posX, posY)
     end
     return cards
@@ -241,6 +244,10 @@ function M.Create(parent, allies, enemies, pW, pH)
     print(string.format(
         "[BattleField] 行中心Y: row1=%.0f row2=%.0f row3=%.0f  安全区=[%d ~ %.0f]",
         rowCenters[1], rowCenters[2], rowCenters[3], TOP_MARGIN, pH - BOT_MARGIN))
+    print(string.format(
+        "[BattleField] 列中心X: ally_back=%.0f ally_front=%.0f | enemy_front=%.0f enemy_back=%.0f",
+        COL_X.ally_back * pW, COL_X.ally_front * pW,
+        COL_X.enemy_front * pW, COL_X.enemy_back * pW))
 
     -- 分前后排
     local allyFront, allyBack = {}, {}
