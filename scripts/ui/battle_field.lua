@@ -16,7 +16,7 @@ local M = {}
 -- 布局常量
 ------------------------------------------------------------
 local TOP_MARGIN = 58   -- 顶栏(54px) + 余量
-local BOT_MARGIN = 55   -- 底部按钮区
+local BOT_MARGIN = 70   -- 底部按钮区(bottom=12+height=50=62px) + 余量
 local ROW_GAP    = 6    -- 行间最小间距
 
 -- 对称列位置: 以 0.50 为中线, 前排/后排各有固定偏移
@@ -209,6 +209,10 @@ local function placeUnitsInColumn(units, side, colXFrac, rowCenters, pW)
         local rowIdx = rows[i]
         local posX = math.floor(centerX - cardW_ / 2)
         local posY = math.floor(rowCenters[rowIdx] - cardH_ / 2)
+        local posBottom = posY + cardH_
+        print(string.format(
+            "[BattleField] %s %s: col=%.2f row=%d posX=%d posY=%d bottom=%d",
+            side, unit.name or "?", colXFrac, rowIdx, posX, posY, posBottom))
         cards[#cards + 1] = createCard(unit, side, posX, posY)
     end
     return cards
@@ -232,8 +236,11 @@ function M.Create(parent, allies, enemies, pW, pH)
     cardW_, cardH_, avatarSize_ = calcCardSize(rowH)
 
     print(string.format(
-        "[BattleField] pW=%.0f pH=%.0f rowH=%.0f cardW=%d cardH=%d avatar=%d",
-        pW, pH, rowH, cardW_, cardH_, avatarSize_))
+        "[BattleField] pW=%.0f pH=%.0f rowH=%.0f cardW=%d cardH=%d avatar=%d TOP=%d BOT=%d",
+        pW, pH, rowH, cardW_, cardH_, avatarSize_, TOP_MARGIN, BOT_MARGIN))
+    print(string.format(
+        "[BattleField] 行中心Y: row1=%.0f row2=%.0f row3=%.0f  安全区=[%d ~ %.0f]",
+        rowCenters[1], rowCenters[2], rowCenters[3], TOP_MARGIN, pH - BOT_MARGIN))
 
     -- 分前后排
     local allyFront, allyBack = {}, {}

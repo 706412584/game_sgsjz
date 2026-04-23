@@ -138,6 +138,7 @@ local function createModalPanel(config)
     }
 
     -- 对话框主面板（纯样式边框，不用贴图）
+    -- onClick 拦截事件冒泡，防止点击对话框内部时触发 overlay 的关闭
     local dialogPanel = UI.Panel {
         width           = width,
         maxHeight       = "85%",
@@ -150,6 +151,7 @@ local function createModalPanel(config)
         opacity         = 0,
         scale           = 0.9,
         transition      = "opacity 0.2s easeOut, scale 0.2s easeOutBack",
+        onClick         = function(self) end,  -- 拦截冒泡，防止触发overlay关闭
         children        = {
             titleWidget,
             contentWidget,
