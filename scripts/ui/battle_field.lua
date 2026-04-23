@@ -1,9 +1,9 @@
 ------------------------------------------------------------
 -- ui/battle_field.lua  —— 战场武将卡牌组件
--- 布局: 敌我各一个 3×3 九宫格 (3列×3行=9格)
--- 列: 后排=远端列, 前排=近端列, 中间列预留
--- 行: 按单位数居中分配 (1人→行2, 2人→行1/3, 3人→行1/2/3)
--- 卡片尺寸根据格子大小动态计算，确保不重叠
+-- 布局: 以屏幕中线为轴，左右对称 4 列 × 3 行网格
+--   我方后排 ← 我方前排 | 中线 | 敌方前排 → 敌方后排
+-- 行: 按单位数居中 (1人→行2, 2人→行1/3, 3人→行1/2/3)
+-- 卡片尺寸由行高动态决定，保证不重叠
 ------------------------------------------------------------
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
@@ -15,20 +15,27 @@ local M = {}
 ------------------------------------------------------------
 -- 布局常量
 ------------------------------------------------------------
-local TOP_MARGIN = 58   -- 顶栏(54px) + padding
+local TOP_MARGIN = 58   -- 顶栏(54px) + 余量
 local BOT_MARGIN = 55   -- 底部按钮区
-local CELL_PAD   = 4    -- 格子内边距
+local ROW_GAP    = 6    -- 行间最小间距
 
--- 两侧区域在屏幕宽度中的范围 (比例)
-local ALLY_X0  = 0.02   -- 我方区域左边
-local ALLY_X1  = 0.46   -- 我方区域右边
-local ENEMY_X0 = 0.54   -- 敌方区域左边
-local ENEMY_X1 = 0.98   -- 敌方区域右边
+-- 对称列位置: 以 0.50 为中线, 前排/后排各有固定偏移
+local CENTER       = 0.50
+local INNER_OFFSET = 0.12   -- 前排距中线
+local OUTER_OFFSET = 0.27   -- 后排距中线
 
--- 最大卡片尺寸
+-- 4 列中心 X (屏幕宽度比例), 完美对称
+local COL_X = {
+    ally_back   = CENTER - OUTER_OFFSET,   -- 0.23
+    ally_front  = CENTER - INNER_OFFSET,   -- 0.38
+    enemy_front = CENTER + INNER_OFFSET,   -- 0.62
+    enemy_back  = CENTER + OUTER_OFFSET,   -- 0.77
+}
+
+-- 卡片尺寸上限
 local MAX_CARD_W = 110
-local MAX_CARD_H = 140
-local AVATAR_RATIO = 0.62  -- 头像占卡片高度
+local MAX_CARD_H = 145
+local AVATAR_RATIO = 0.70   -- 头像占卡片高度比例 (放大)
 
 -- 状态效果中文映射
 local STATUS_NAMES = {
@@ -44,53 +51,37 @@ local container_
 local unitCards_ = {}
 local panelW_, panelH_ = 0, 0
 local lastHighlight_ = nil
-local cardW_, cardH_, avatarSize_ = 100, 130, 78
+local cardW_, cardH_, avatarSize_ = 100, 130, 80
 
 ------------------------------------------------------------
--- 九宫格计算
+-- 行位置计算: 3 行均匀分布在安全区
 ------------------------------------------------------------
-
---- 计算网格参数: 3列中心X, 3行中心Y, 格子宽高, 卡片尺寸
-local function calcGrid(pW, pH, x0Frac, x1Frac)
-    local x0 = math.floor(pW * x0Frac)
-    local x1 = math.floor(pW * x1Frac)
+local function calcRowCenters(pH)
     local y0 = TOP_MARGIN
     local y1 = pH - BOT_MARGIN
-
-    local colW = (x1 - x0) / 3
     local rowH = (y1 - y0) / 3
-
-    -- 3列中心X
-    local colCenters = {
-        x0 + colW * 0.5,
-        x0 + colW * 1.5,
-        x0 + colW * 2.5,
-    }
-    -- 3行中心Y
-    local rowCenters = {
-        y0 + rowH * 0.5,
-        y0 + rowH * 1.5,
-        y0 + rowH * 2.5,
-    }
-
-    -- 卡片尺寸 = 格子大小 - padding, 但不超过最大值
-    local cw = math.min(MAX_CARD_W, math.floor(colW - CELL_PAD * 2))
-    local ch = math.min(MAX_CARD_H, math.floor(rowH - CELL_PAD * 2))
-    -- 保持宽高比
-    if cw > ch * (MAX_CARD_W / MAX_CARD_H) then
-        cw = math.floor(ch * (MAX_CARD_W / MAX_CARD_H))
-    end
-    local av = math.floor(ch * AVATAR_RATIO)
-
-    return colCenters, rowCenters, cw, ch, av
+    return {
+        y0 + rowH * 0.5,   -- 行1 中心
+        y0 + rowH * 1.5,   -- 行2 中心
+        y0 + rowH * 2.5,   -- 行3 中心
+    }, rowH
 end
 
---- N 个单位分配到 3 行 (居中分布), 返回行索引数组
+--- 根据行高计算卡片尺寸
+local function calcCardSize(rowH)
+    local ch = math.min(MAX_CARD_H, math.floor(rowH - ROW_GAP))
+    local cw = math.floor(ch * (MAX_CARD_W / MAX_CARD_H))
+    cw = math.min(MAX_CARD_W, cw)
+    local av = math.floor(ch * AVATAR_RATIO)
+    return cw, ch, av
+end
+
+--- N 个单位分配到 3 行 (居中), 返回行索引数组
 local function assignRows(count)
     if count <= 0 then return {} end
-    if count == 1 then return { 2 } end          -- 中间行
-    if count == 2 then return { 1, 3 } end        -- 上下行
-    return { 1, 2, 3 }                            -- 全部行
+    if count == 1 then return { 2 } end
+    if count == 2 then return { 1, 3 } end
+    return { 1, 2, 3 }
 end
 
 ------------------------------------------------------------
@@ -100,9 +91,9 @@ local function createCard(unit, side, posX, posY)
     local nameColor = side == "ally" and C.jade or C.red
     local hpColor   = side == "ally" and C.hp  or C.red
 
-    local hpH  = math.max(4, math.floor(cardH_ * 0.04))
+    local hpH  = math.max(4, math.floor(cardH_ * 0.045))
     local morH = math.max(3, math.floor(cardH_ * 0.03))
-    local nameFontSize  = cardH_ < 100 and 8 or (cardH_ < 120 and 9 or 10)
+    local nameFontSize   = cardH_ < 100 and 8 or (cardH_ < 120 and 9 or 10)
     local statusFontSize = cardH_ < 100 and 7 or (cardH_ < 120 and 8 or 9)
 
     local hpBar = UI.ProgressBar {
@@ -151,7 +142,7 @@ local function createCard(unit, side, posX, posY)
     local avatar = UI.Panel {
         width           = avatarSize_,
         height          = avatarSize_,
-        borderRadius    = 6,
+        borderRadius    = 8,
         borderColor     = nameColor,
         borderWidth     = 2,
         backgroundImage = imgPath,
@@ -203,19 +194,20 @@ local function createCard(unit, side, posX, posY)
 end
 
 ------------------------------------------------------------
--- 将一组单位放入指定列的格子中
--- colCenter: 列中心X, rowCenters: 3行中心Y数组
+-- 将一组单位放入指定列
 ------------------------------------------------------------
-local function placeUnitsInColumn(units, side, colCenter, rowCenters)
+local function placeUnitsInColumn(units, side, colXFrac, rowCenters, pW)
     local cards = {}
     local n = #units
     if n == 0 then return cards end
 
     local rows = assignRows(n)
+    local centerX = math.floor(colXFrac * pW)
+
     for i, unit in ipairs(units) do
         if i > 3 then break end
         local rowIdx = rows[i]
-        local posX = math.floor(colCenter - cardW_ / 2)
+        local posX = math.floor(centerX - cardW_ / 2)
         local posY = math.floor(rowCenters[rowIdx] - cardH_ / 2)
         cards[#cards + 1] = createCard(unit, side, posX, posY)
     end
@@ -233,19 +225,15 @@ function M.Create(parent, allies, enemies, pW, pH)
     unitCards_ = {}
     lastHighlight_ = nil
 
-    -- 计算我方九宫格
-    local aCols, aRows, aw, ah, aav = calcGrid(pW, pH, ALLY_X0, ALLY_X1)
-    -- 计算敌方九宫格
-    local eCols, eRows, ew, eh, eav = calcGrid(pW, pH, ENEMY_X0, ENEMY_X1)
+    -- 计算 3 行中心 Y 和行高
+    local rowCenters, rowH = calcRowCenters(pH)
 
-    -- 取两侧较小值作为统一卡片尺寸 (保持视觉一致)
-    cardW_      = math.min(aw, ew)
-    cardH_      = math.min(ah, eh)
-    avatarSize_ = math.min(aav, eav)
+    -- 根据行高计算卡片尺寸
+    cardW_, cardH_, avatarSize_ = calcCardSize(rowH)
 
     print(string.format(
-        "[BattleField] pW=%.0f pH=%.0f cardW=%d cardH=%d avatar=%d",
-        pW, pH, cardW_, cardH_, avatarSize_))
+        "[BattleField] pW=%.0f pH=%.0f rowH=%.0f cardW=%d cardH=%d avatar=%d",
+        pW, pH, rowH, cardW_, cardH_, avatarSize_))
 
     -- 分前后排
     local allyFront, allyBack = {}, {}
@@ -259,22 +247,19 @@ function M.Create(parent, allies, enemies, pW, pH)
         else enemyBack[#enemyBack + 1] = u end
     end
 
-    -- 我方九宫格:
-    --   列1(最左) = 后排, 列2(中) = 空, 列3(最右/靠中间) = 前排
-    local allyBackCards  = placeUnitsInColumn(allyBack,  "ally", aCols[1], aRows)
-    local allyFrontCards = placeUnitsInColumn(allyFront, "ally", aCols[3], aRows)
-
-    -- 敌方九宫格 (镜像):
-    --   列1(最左/靠中间) = 前排, 列2(中) = 空, 列3(最右) = 后排
-    local enemyFrontCards = placeUnitsInColumn(enemyFront, "enemy", eCols[1], eRows)
-    local enemyBackCards  = placeUnitsInColumn(enemyBack,  "enemy", eCols[3], eRows)
-
-    -- 添加到容器
+    -- 布局 4 列 (对称)
     local allCards = {}
-    for _, c in ipairs(allyBackCards)   do allCards[#allCards + 1] = c end
-    for _, c in ipairs(allyFrontCards)  do allCards[#allCards + 1] = c end
-    for _, c in ipairs(enemyFrontCards) do allCards[#allCards + 1] = c end
-    for _, c in ipairs(enemyBackCards)  do allCards[#allCards + 1] = c end
+    local groups = {
+        { allyBack,   COL_X.ally_back },
+        { allyFront,  COL_X.ally_front },
+        { enemyFront, COL_X.enemy_front },
+        { enemyBack,  COL_X.enemy_back },
+    }
+    for _, g in ipairs(groups) do
+        local side = (g[2] < CENTER) and "ally" or "enemy"
+        local cards = placeUnitsInColumn(g[1], side, g[2], rowCenters, pW)
+        for _, c in ipairs(cards) do allCards[#allCards + 1] = c end
+    end
 
     for _, card in ipairs(allCards) do
         parent:AddChild(card)
