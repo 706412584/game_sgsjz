@@ -852,12 +852,18 @@ local function getTurnOrder(allUnits)
         end
     end
     -- 按 统+勇 降序(高属性先手), speed_up 加成
+    -- 预计算随机扰动, 避免 sort 比较函数内用 random 违反严格弱排序
+    local jitter = {}
+    for _, u in ipairs(alive) do
+        jitter[u] = math.random() * 5
+    end
     table.sort(alive, function(a, b)
-        local sa = a.tong + a.yong * 0.3 + math.random() * 5
-        local sb = b.tong + b.yong * 0.3 + math.random() * 5
+        local sa = a.tong + a.yong * 0.3 + jitter[a]
+        local sb = b.tong + b.yong * 0.3 + jitter[b]
         if a.statuses[STATUS.SPEED_UP] then sa = sa + BUFF_SPD_PRIO end
         if b.statuses[STATUS.SPEED_UP] then sb = sb + BUFF_SPD_PRIO end
-        return sa > sb
+        if sa ~= sb then return sa > sb end
+        return false
     end)
     return alive
 end
