@@ -48,20 +48,27 @@ local SOLDIER_KEYWORDS = {
 -- 公开 API
 ------------------------------------------------------------
 
+--- 根据阵营决定后缀: ally 朝右(默认), enemy 朝左(_left)
+local function suffix(side)
+    return side == "enemy" and "_left" or ""
+end
+
 --- 获取单位 idle 精灵贴图路径
 ---@param heroId string|nil
 ---@param unitName string|nil  用于小兵名字匹配
+---@param side string|nil      "ally"|"enemy", 默认 "ally"(朝右)
 ---@return string|nil
-function M.GetIdle(heroId, unitName)
+function M.GetIdle(heroId, unitName, side)
+    local sfx = suffix(side)
     if heroId and heroSpriteSet[heroId] then
-        return UNIT_DIR .. "unit_" .. heroId .. "_idle.png"
+        return UNIT_DIR .. "unit_" .. heroId .. "_idle" .. sfx .. ".png"
     end
     -- 尝试按名字匹配通用兵种
     if unitName then
         for _, rule in ipairs(SOLDIER_KEYWORDS) do
             for _, kw in ipairs(rule.keywords) do
                 if string.find(unitName, kw) then
-                    return UNIT_DIR .. "unit_" .. rule.sprite .. "_idle.png"
+                    return UNIT_DIR .. "unit_" .. rule.sprite .. "_idle" .. sfx .. ".png"
                 end
             end
         end
@@ -72,16 +79,18 @@ end
 --- 获取单位 atk 精灵贴图路径
 ---@param heroId string|nil
 ---@param unitName string|nil
+---@param side string|nil      "ally"|"enemy", 默认 "ally"(朝右)
 ---@return string|nil
-function M.GetAtk(heroId, unitName)
+function M.GetAtk(heroId, unitName, side)
+    local sfx = suffix(side)
     if heroId and heroSpriteSet[heroId] then
-        return UNIT_DIR .. "unit_" .. heroId .. "_atk.png"
+        return UNIT_DIR .. "unit_" .. heroId .. "_atk" .. sfx .. ".png"
     end
     if unitName then
         for _, rule in ipairs(SOLDIER_KEYWORDS) do
             for _, kw in ipairs(rule.keywords) do
                 if string.find(unitName, kw) then
-                    return UNIT_DIR .. "unit_" .. rule.sprite .. "_atk.png"
+                    return UNIT_DIR .. "unit_" .. rule.sprite .. "_atk" .. sfx .. ".png"
                 end
             end
         end

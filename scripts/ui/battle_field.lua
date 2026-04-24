@@ -125,8 +125,9 @@ local function createCard(unit, side, colKey, rowIdx)
     }
 
     -- 优先使用战斗精灵图，无精灵则回退英雄头像
-    local spriteIdle = Sprites.GetIdle(unit.heroId, unit.name)
-    local spriteAtk  = Sprites.GetAtk(unit.heroId, unit.name)
+    -- ally 朝右, enemy 朝左
+    local spriteIdle = Sprites.GetIdle(unit.heroId, unit.name, side)
+    local spriteAtk  = Sprites.GetAtk(unit.heroId, unit.name, side)
     local imgPath = spriteIdle
         or (unit.heroId and ("Textures/heroes/hero_" .. unit.heroId .. ".png"))
         or nil
