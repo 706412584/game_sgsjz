@@ -81,9 +81,14 @@ local function createModalPanel(config)
     if config.buttons then
         for _, cfg in ipairs(config.buttons) do
             btnChildren[#btnChildren + 1] = makeBtn(cfg.text, cfg.variant, function(self)
-                if cfg.onClick then cfg.onClick() end
-                if cfg.noAutoClose then return end
+                if cfg.noAutoClose then
+                    if cfg.onClick then cfg.onClick() end
+                    return
+                end
+                -- 先关闭当前弹窗，再执行回调
+                -- 避免回调中弹出的新弹窗被 auto-close 误关
                 M.Close()
+                if cfg.onClick then cfg.onClick() end
             end)
         end
     end
