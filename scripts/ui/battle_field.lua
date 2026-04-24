@@ -8,7 +8,6 @@
 local UI      = require("urhox-libs/UI")
 local Theme   = require("ui.theme")
 local Sprites = require("data.data_sprites")
-local DT      = require("data.data_troops")
 local C       = Theme.colors
 local S       = Theme.sizes
 
@@ -81,16 +80,6 @@ end
 ------------------------------------------------------------
 -- 创建单个卡牌 (不再设 position=absolute)
 ------------------------------------------------------------
--- 兵种分类色
-local TROOP_CAT_COLORS = {
-    infantry = { 180, 140,  80, 220 },  -- 土黄
-    cavalry  = {  80, 160, 220, 220 },  -- 天蓝
-    archer   = {  80, 200, 100, 220 },  -- 翠绿
-    siege    = { 160, 160, 160, 220 },  -- 银灰
-    magic    = { 180, 100, 220, 220 },  -- 紫色
-    support  = { 220, 180,  80, 220 },  -- 金黄
-}
-
 local function createCard(unit, side, colKey, rowIdx)
     local nameColor = side == "ally" and C.jade or C.red
     local hpColor   = side == "ally" and C.hp  or C.red
@@ -164,23 +153,6 @@ local function createCard(unit, side, colKey, rowIdx)
         } or {},
     }
 
-    -- 兵种小标签
-    local troopCatName = unit.heroId and DT.GetHeroCatName(unit.heroId) or nil
-    local troopCat     = unit.heroId and DT.GetHeroCategory(unit.heroId) or nil
-    local troopColor   = troopCat and TROOP_CAT_COLORS[troopCat] or { 120, 120, 120, 200 }
-    local troopFontSize = cardH_ < 80 and 6 or (cardH_ < 100 and 7 or 8)
-
-    local troopLabel = UI.Label {
-        text            = troopCatName or "",
-        fontSize        = troopFontSize,
-        fontColor       = { 255, 255, 255, 240 },
-        textAlign       = "center",
-        width           = avatarSize_,
-        maxLines        = 1,
-        backgroundColor = troopColor,
-        borderRadius    = 2,
-    }
-
     -- 普通 flex 子元素, 不用 absolute
     local card = UI.Panel {
         width      = cardW_,
@@ -191,7 +163,6 @@ local function createCard(unit, side, colKey, rowIdx)
         children   = {
             avatar,
             nameLabel,
-            troopLabel,
             hpBar,
             moraleBar,
             statusLabel,
