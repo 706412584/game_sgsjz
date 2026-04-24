@@ -490,6 +490,7 @@ end
 function M.Update(dt)
     if not playing_ or not battleLog_ then return end
     BFX.Update(dt)
+    BField.TickTimers(dt)
 
     roundTimer_ = roundTimer_ + dt * speed_
     if roundTimer_ < 0.6 then return end

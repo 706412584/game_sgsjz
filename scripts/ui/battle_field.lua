@@ -5,10 +5,11 @@
 -- 卡牌是 flex 子元素，自动适配容器实际宽度（解决 safe area 偏移）
 -- 参考: 风云天下 — 卡牌铺满战场，结果按钮浮在上层
 ------------------------------------------------------------
-local UI    = require("urhox-libs/UI")
-local Theme = require("ui.theme")
-local C     = Theme.colors
-local S     = Theme.sizes
+local UI      = require("urhox-libs/UI")
+local Theme   = require("ui.theme")
+local Sprites = require("data.data_sprites")
+local C       = Theme.colors
+local S       = Theme.sizes
 
 local M = {}
 
@@ -46,6 +47,9 @@ local lastHighlight_ = nil
 local cardW_, cardH_, avatarSize_ = 100, 130, 80
 local gridRow_   -- flexRow 容器引用, 用于估算位置
 local containerW_, containerH_ = 0, 0  -- 用于 GetUnitPos 估算
+
+-- 攻击精灵恢复定时器队列
+local atkTimers_ = {}  -- { { unitId, remaining } }
 
 ------------------------------------------------------------
 -- 根据可用高度计算卡片尺寸
@@ -120,8 +124,11 @@ local function createCard(unit, side, colKey, rowIdx)
         maxLines   = 1,
     }
 
-    local imgPath = unit.heroId
-        and ("Textures/heroes/hero_" .. unit.heroId .. ".png")
+    -- 优先使用战斗精灵图，无精灵则回退英雄头像
+    local spriteIdle = Sprites.GetIdle(unit.heroId, unit.name)
+    local spriteAtk  = Sprites.GetAtk(unit.heroId, unit.name)
+    local imgPath = spriteIdle
+        or (unit.heroId and ("Textures/heroes/hero_" .. unit.heroId .. ".png"))
         or nil
 
     local avatar = UI.Panel {
@@ -131,7 +138,7 @@ local function createCard(unit, side, colKey, rowIdx)
         borderColor     = nameColor,
         borderWidth     = 2,
         backgroundImage = imgPath,
-        backgroundFit   = "cover",
+        backgroundFit   = "contain",
         backgroundColor = side == "ally" and { 30, 55, 45, 255 } or { 55, 30, 30, 255 },
         justifyContent  = "center",
         alignItems      = "center",
@@ -171,6 +178,8 @@ local function createCard(unit, side, colKey, rowIdx)
         nameLabel   = nameLabel,
         colKey      = colKey,
         rowIdx      = rowIdx,
+        spriteIdle  = spriteIdle or imgPath,
+        spriteAtk   = spriteAtk,
     }
 
     return card
@@ -349,8 +358,9 @@ function M.UpdateUnit(unitId, hp, maxHp, morale, statuses, alive)
     end
 end
 
---- 高亮当前行动者
+--- 高亮当前行动者 (边框 + 攻击精灵切换)
 function M.HighlightUnit(unitId)
+    -- 恢复上一个高亮单位的边框
     if lastHighlight_ and unitCards_[lastHighlight_] then
         local prev = unitCards_[lastHighlight_]
         prev.avatar:SetStyle({ borderWidth = 2 })
@@ -358,11 +368,23 @@ function M.HighlightUnit(unitId)
     local info = unitCards_[unitId]
     if info then
         info.avatar:SetStyle({ borderWidth = 4 })
+
+        -- 攻击精灵切换动画
+        if info.spriteAtk then
+            info.avatar:SetStyle({ backgroundImage = info.spriteAtk })
+        end
+
+        -- 缩放弹跳动画
         info.panel:Animate({
-            keyframes = { { scale = 1.08 }, { scale = 1.0 } },
-            duration  = 0.3,
+            keyframes = { { scale = 1.12 }, { scale = 1.0 } },
+            duration  = 0.35,
             easing    = "easeOutBack",
         })
+
+        -- 延迟恢复 idle 精灵 (通过定时器队列)
+        if info.spriteAtk and info.spriteIdle then
+            atkTimers_[#atkTimers_ + 1] = { unitId = unitId, remaining = 0.4 }
+        end
     end
     lastHighlight_ = unitId
 end
@@ -388,10 +410,29 @@ function M.FindUnitByName(name)
     return nil
 end
 
+--- 驱动攻击精灵恢复定时器 (需要每帧从 page_battle 调用)
+function M.TickTimers(dt)
+    local i = 1
+    while i <= #atkTimers_ do
+        local t = atkTimers_[i]
+        t.remaining = t.remaining - dt
+        if t.remaining <= 0 then
+            local info = unitCards_[t.unitId]
+            if info and info.avatar and info.spriteIdle then
+                info.avatar:SetStyle({ backgroundImage = info.spriteIdle })
+            end
+            table.remove(atkTimers_, i)
+        else
+            i = i + 1
+        end
+    end
+end
+
 --- 清理
 function M.Clear()
     unitCards_ = {}
     lastHighlight_ = nil
+    atkTimers_ = {}
     container_ = nil
     gridRow_ = nil
 end
