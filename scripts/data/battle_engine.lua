@@ -8,6 +8,7 @@ local DH = require("data.data_heroes")
 local DM = require("data.data_maps")
 local DF = require("data.data_formation")
 local TS = require("data.treasure_state")
+local DT = require("data.data_troops")
 
 local M = {}
 
@@ -343,8 +344,25 @@ function M.CreateHeroUnit(heroId, heroState, side, row)
     local yong = hd.stats.yong + (hd.caps.yong - hd.stats.yong) * growthFactor
     local zhi  = hd.stats.zhi  + (hd.caps.zhi  - hd.stats.zhi)  * growthFactor
 
+    -- ========== 兵种属性加成 ==========
+    local troopKey = DT.GetHeroTroop(heroId)
+    local troopCat = nil
+    if troopKey then
+        local troopData = DT.Get(troopKey)
+        if troopData then
+            troopCat = troopData.category
+            local b = troopData.bonuses or {}
+            if b.atk_pct then yong = yong * (1 + b.atk_pct) end
+            if b.def_pct then tong = tong * (1 + b.def_pct) end
+            if b.spd_pct then tong = tong * (1 + b.spd_pct * 0.3) end  -- 机动→先手
+        end
+    end
+
     -- 兵力(HP) = 统 * 10 + 勇 * 5 + 等级 * 30
     local maxHp = math.floor(tong * 10 + yong * 5 + level * 30)
+
+    -- 兵种分类被动加成
+    local catPassives = troopCat and DT.GetCatPassives(troopCat) or {}
 
     return {
         id          = side .. "_" .. heroId,
@@ -363,6 +381,15 @@ function M.CreateHeroUnit(heroId, heroState, side, row)
         alive       = true,
         totalDamage = 0,
         totalHeal   = 0,
+        -- 兵种字段
+        troopKey     = troopKey,
+        troopCat     = troopCat,
+        troopDodge   = (catPassives.dodge_bonus or 0)
+                     + ((troopKey and DT.GetBonuses(troopKey).dodge_pct) or 0),
+        troopCrit    = (catPassives.crit_bonus or 0)
+                     + ((troopKey and DT.GetBonuses(troopKey).crit_pct) or 0),
+        troopMoraleImmune = catPassives.morale_immune or false,
+        troopBlockImmune  = catPassives.block_immune or false,
     }
 end
 
@@ -436,14 +463,33 @@ local function calcBasicDamage(attacker, defender)
 
     local damage = baseAtk * (1 - defRate)
 
-    -- 暴击判定(含阵法加成)
-    local critRate = M.BASE_CRIT_RATE + (attacker.formationCrit or 0)
+    -- 兵种克制加成
+    if attacker.troopCat and defender.troopCat then
+        damage = damage * DT.GetCounterMult(attacker.troopCat, defender.troopCat)
+    end
+    -- 兵种特殊: 反骑兵加成
+    if attacker.troopKey and defender.troopCat == DT.CAT_CAVALRY then
+        local sp = (DT.Get(attacker.troopKey) or {}).specials
+        if sp and sp.anti_cavalry then
+            damage = damage * (1 + sp.anti_cavalry)
+        end
+    end
+    -- 兵种特殊: 反弓兵防御
+    if defender.troopKey and attacker.troopCat == DT.CAT_ARCHER then
+        local sp = (DT.Get(defender.troopKey) or {}).specials
+        if sp and sp.anti_archer_def then
+            damage = damage * (1 - sp.anti_archer_def)
+        end
+    end
+
+    -- 暴击判定(含阵法+兵种加成)
+    local critRate = M.BASE_CRIT_RATE + (attacker.formationCrit or 0) + (attacker.troopCrit or 0)
     if attacker.yong > 100 then critRate = critRate + (attacker.yong - 100) * 0.001 end
     local isCrit = math.random() < critRate
     if isCrit then damage = damage * M.CRIT_MULTIPLIER end
 
-    -- 闪避判定(阵法闪避)
-    local dodgeRate = defender.formationDodge or 0
+    -- 闪避判定(阵法+兵种闪避)
+    local dodgeRate = (defender.formationDodge or 0) + (defender.troopDodge or 0)
     if dodgeRate > 0 and math.random() < dodgeRate then
         return 0, false, true  -- damage=0, isCrit=false, isDodge=true
     end
@@ -477,14 +523,33 @@ local function calcSkillDamage(attacker, defender, multiplier)
 
     local damage = baseAtk * multiplier * (1 - defRate)
 
-    -- 战法暴击率较低但伤害更高(含阵法加成)
-    local critRate = M.BASE_CRIT_RATE * 0.8 + (attacker.formationCrit or 0)
+    -- 兵种克制加成
+    if attacker.troopCat and defender.troopCat then
+        damage = damage * DT.GetCounterMult(attacker.troopCat, defender.troopCat)
+    end
+    -- 兵种特殊: 反骑兵加成
+    if attacker.troopKey and defender.troopCat == DT.CAT_CAVALRY then
+        local sp = (DT.Get(attacker.troopKey) or {}).specials
+        if sp and sp.anti_cavalry then
+            damage = damage * (1 + sp.anti_cavalry)
+        end
+    end
+    -- 兵种特殊: 反弓兵防御
+    if defender.troopKey and attacker.troopCat == DT.CAT_ARCHER then
+        local sp = (DT.Get(defender.troopKey) or {}).specials
+        if sp and sp.anti_archer_def then
+            damage = damage * (1 - sp.anti_archer_def)
+        end
+    end
+
+    -- 战法暴击率较低但伤害更高(含阵法+兵种加成)
+    local critRate = M.BASE_CRIT_RATE * 0.8 + (attacker.formationCrit or 0) + (attacker.troopCrit or 0)
     if attacker.yong > 120 then critRate = critRate + (attacker.yong - 120) * 0.0012 end
     local isCrit = math.random() < critRate
     if isCrit then damage = damage * (M.CRIT_MULTIPLIER + 0.2) end
 
-    -- 闪避判定(阵法闪避)
-    local dodgeRate = defender.formationDodge or 0
+    -- 闪避判定(阵法+兵种闪避)
+    local dodgeRate = (defender.formationDodge or 0) + (defender.troopDodge or 0)
     if dodgeRate > 0 and math.random() < dodgeRate then
         return 0, false, true
     end
@@ -511,6 +576,11 @@ local function calcMagicDamage(attacker, defender, multiplier)
     end
 
     local damage = baseAtk * multiplier * (1 - defRate)
+
+    -- 兵种克制加成
+    if attacker.troopCat and defender.troopCat then
+        damage = damage * DT.GetCounterMult(attacker.troopCat, defender.troopCat)
+    end
 
     -- 法术不暴击，但受灼烧增伤
     if defender.statuses[STATUS.BURN] then
@@ -896,10 +966,12 @@ local function executeAction(actor, allUnits)
             end
         end
 
-        -- 被攻击增怒
-        if t.alive then t.morale = math.min(M.MORALE_MAX, t.morale + M.MORALE_BE_HIT) end
-        -- 击杀增怒
-        if not t.alive then
+        -- 被攻击增怒(机械系免疫)
+        if t.alive and not t.troopMoraleImmune then
+            t.morale = math.min(M.MORALE_MAX, t.morale + M.MORALE_BE_HIT)
+        end
+        -- 击杀增怒(机械系免疫)
+        if not t.alive and not actor.troopMoraleImmune then
             actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_KILL)
             -- 击杀回怒额外加成
             if extras.killMoraleBonus then
@@ -1029,7 +1101,9 @@ local function executeAction(actor, allUnits)
         if extras.allyMoraleBoost then
             local allies = getAliveUnits(allUnits, actor.side)
             for _, a in ipairs(allies) do
-                a.morale = math.min(M.MORALE_MAX, a.morale + extras.allyMoraleBoost)
+                if not a.troopMoraleImmune then
+                    a.morale = math.min(M.MORALE_MAX, a.morale + extras.allyMoraleBoost)
+                end
             end
             action.extras[#action.extras + 1] = { type = "ally_morale", boost = extras.allyMoraleBoost }
         end
@@ -1039,7 +1113,9 @@ local function executeAction(actor, allUnits)
             local enemySide = actor.side == "ally" and "enemy" or "ally"
             local enemies = getAliveUnits(allUnits, enemySide)
             for _, e in ipairs(enemies) do
-                e.morale = math.max(0, e.morale - extras.enemyMoraleReduce)
+                if not e.troopMoraleImmune then
+                    e.morale = math.max(0, e.morale - extras.enemyMoraleReduce)
+                end
             end
             action.extras[#action.extras + 1] = { type = "enemy_morale_reduce", amount = extras.enemyMoraleReduce }
         end
@@ -1098,8 +1174,10 @@ local function executeAction(actor, allUnits)
                 action.isCrit[#action.isCrit + 1] = false
                 action.killed[#action.killed + 1] = false
                 action.extras[#action.extras + 1] = { type = "dodge", target = t.name }
-                -- 闪避仍回士气
-                actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_HIT)
+                -- 闪避仍回士气(机械系免疫)
+                if not actor.troopMoraleImmune then
+                    actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_HIT)
+                end
             else
                 -- 暴击加成(被动)
                 if extras.critBonus and not crit then
@@ -1114,8 +1192,10 @@ local function executeAction(actor, allUnits)
                 action.isCrit[#action.isCrit + 1] = crit
                 action.killed[#action.killed + 1] = not t.alive
 
-                -- 士气变化
-                actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_HIT)
+                -- 士气变化(机械系免疫)
+                if not actor.troopMoraleImmune then
+                    actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_HIT)
+                end
                 postDamageHit(t, dmg, false)
             end
         end
@@ -1173,8 +1253,8 @@ function M.BuildAllyTeam(gameState)
         if buffs.back_atk_pct and u.row == "back" then
             u.yong = math.floor(u.yong * (1 + buffs.back_atk_pct))
         end
-        -- 初始士气
-        if buffs.morale_init then
+        -- 初始士气(机械系免疫)
+        if buffs.morale_init and not u.troopMoraleImmune then
             u.morale = math.min(M.MORALE_MAX, u.morale + buffs.morale_init)
         end
         -- 暴击/闪避存储到单元上供战斗时使用
