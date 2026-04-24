@@ -27,9 +27,9 @@ local GROW_INNER  = 2   -- 前后排之间间距
 local GROW_CENTER = 5   -- 中线间距
 
 -- 卡片尺寸上限
-local MAX_CARD_W  = 120
-local MAX_CARD_H  = 150
-local AVATAR_RATIO = 0.92   -- 头像占卡片高度比例 (放大立绘)
+local MAX_CARD_W  = 130
+local MAX_CARD_H  = 160
+local AVATAR_RATIO = 1.0    -- 头像占满卡片高度
 
 -- 状态效果中文映射
 local STATUS_NAMES = {
@@ -50,6 +50,10 @@ local containerW_, containerH_ = 0, 0  -- 用于 GetUnitPos 估算
 
 -- 攻击精灵恢复定时器队列
 local atkTimers_ = {}  -- { { unitId, remaining } }
+-- 上一帧 HP 缓存（用于检测受击）
+local prevHp_ = {}     -- { [unitId] = hp }
+-- 已死亡单位（避免重复播放死亡动画）
+local deadUnits_ = {}  -- { [unitId] = true }
 
 ------------------------------------------------------------
 -- 根据可用高度计算卡片尺寸
@@ -174,9 +178,22 @@ local function createCard(unit, side, colKey, rowIdx)
         nameLabel   = nameLabel,
         colKey      = colKey,
         rowIdx      = rowIdx,
+        side        = side,
         spriteIdle  = spriteIdle or imgPath,
         spriteAtk   = spriteAtk,
     }
+
+    -- 待机呼吸动画: 微缩放循环 (让角色看起来有生命感)
+    avatar:Animate({
+        keyframes = {
+            [0]   = { scale = 1.0 },
+            [1]   = { scale = 1.04 },
+        },
+        duration  = 1.8 + math.random() * 0.6,  -- 1.8~2.4秒, 各卡错开节奏
+        loop      = true,
+        direction = "alternate",
+        easing    = "easeInOut",
+    })
 
     return card
 end
@@ -327,6 +344,9 @@ function M.UpdateUnit(unitId, hp, maxHp, morale, statuses, alive)
     local info = unitCards_[unitId]
     if not info then return end
 
+    local oldHp = prevHp_[unitId]
+    prevHp_[unitId] = hp
+
     if info.hpBar then
         local ratio = alive and math.max(0, hp / maxHp) or 0
         info.hpBar:SetValue(ratio)
@@ -336,8 +356,38 @@ function M.UpdateUnit(unitId, hp, maxHp, morale, statuses, alive)
         info.moraleBar:SetValue((morale or 0) / 100)
     end
 
-    if not alive then
-        info.panel:SetStyle({ opacity = 0.3 })
+    -- 受击抖动: HP 下降时触发水平晃动
+    if oldHp and hp < oldHp and alive then
+        info.panel:Animate({
+            keyframes = {
+                [0]    = { translateX = 0 },
+                [0.15] = { translateX = -6 },
+                [0.35] = { translateX = 6 },
+                [0.55] = { translateX = -4 },
+                [0.75] = { translateX = 3 },
+                [1]    = { translateX = 0 },
+            },
+            duration = 0.3,
+            easing   = "linear",
+        })
+    end
+
+    -- 阵亡动画: 缩小 + 旋转 + 淡出
+    if not alive and not deadUnits_[unitId] then
+        deadUnits_[unitId] = true
+        -- 停止呼吸动画
+        info.avatar:StopAnimation()
+        -- 播放死亡动画
+        info.panel:Animate({
+            keyframes = {
+                [0]   = { scale = 1.0, opacity = 1.0, rotate = 0 },
+                [0.6] = { scale = 0.6, opacity = 0.5, rotate = (info.side == "ally") and -15 or 15 },
+                [1]   = { scale = 0.4, opacity = 0.2, rotate = (info.side == "ally") and -25 or 25 },
+            },
+            duration = 0.6,
+            easing   = "easeInCubic",
+            fillMode = "forwards",
+        })
     end
 
     if info.statusLabel then
@@ -354,26 +404,33 @@ function M.UpdateUnit(unitId, hp, maxHp, morale, statuses, alive)
     end
 end
 
---- 高亮当前行动者 (缩放 + 攻击精灵切换)
+--- 高亮当前行动者 (前冲 + 放大 + 攻击精灵切换)
 function M.HighlightUnit(unitId)
     local info = unitCards_[unitId]
     if info then
 
-        -- 攻击精灵切换动画
+        -- 攻击精灵切换
         if info.spriteAtk then
             info.avatar:SetStyle({ backgroundImage = info.spriteAtk })
         end
 
-        -- 缩放弹跳动画
+        -- 前冲方向: ally(右侧) → 正X前冲, enemy(左侧) → 负X前冲
+        local lungeX = (info.side == "ally") and 18 or -18
+
+        -- 前冲 + 放大 + 微旋转 攻击动画
         info.panel:Animate({
-            keyframes = { { scale = 1.12 }, { scale = 1.0 } },
-            duration  = 0.35,
-            easing    = "easeOutBack",
+            keyframes = {
+                [0]   = { scale = 1.0,  translateX = 0,      rotate = 0 },
+                [0.3] = { scale = 1.15, translateX = lungeX, rotate = (info.side == "ally") and 3 or -3 },
+                [1]   = { scale = 1.0,  translateX = 0,      rotate = 0 },
+            },
+            duration = 0.45,
+            easing   = "easeOutBack",
         })
 
-        -- 延迟恢复 idle 精灵 (通过定时器队列)
+        -- 延迟恢复 idle 精灵
         if info.spriteAtk and info.spriteIdle then
-            atkTimers_[#atkTimers_ + 1] = { unitId = unitId, remaining = 0.4 }
+            atkTimers_[#atkTimers_ + 1] = { unitId = unitId, remaining = 0.5 }
         end
     end
     lastHighlight_ = unitId
@@ -423,6 +480,8 @@ function M.Clear()
     unitCards_ = {}
     lastHighlight_ = nil
     atkTimers_ = {}
+    prevHp_ = {}
+    deadUnits_ = {}
     container_ = nil
     gridRow_ = nil
 end
