@@ -49,7 +49,7 @@ local tagBtns_ = {}
 local showAll_ = false          -- 默认只显示项目标签
 
 -- 项目默认显示的标签
-local PROJECT_TAGS = { StartPage = true, DebugLog = true, FMT = true }
+local PROJECT_TAGS = { StartPage = true, DebugLog = true, FMT = true, Battle = true }
 
 -- ========== 工具函数 ==========
 

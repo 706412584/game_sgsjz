@@ -1,50 +1,34 @@
-# ========================================
-# 三国神将录 .gitignore
-# 仅跟踪: scripts/ assets/ docs/ game_material/ CLAUDE.md .gitignore
-# ========================================
-
-# === 构建产物 ===
+# Build & dist
 .build/
 dist/
 
-# === 引擎项目配置 ===
-.project/
-
-# === 临时文件 ===
-.tmp/
-
-# === AI / 工具配置 ===
-.claude/
-.cli/
-.agent/
-
-# === SSH 密钥（绝对不能泄露） ===
-.ssh/
-
-# === LSP 类型定义 ===
-.emmylua/
-
-# === 日志 ===
-logs/
-
-# === 引擎只读资源（沙箱挂载，不归项目） ===
+# Engine internal (read-only, not user code)
 engine-docs/
 examples/
 templates/
 urhox-libs/
 schemas/
 lua-tools/
-prompts/
+.emmylua/
 
-# === OS 生成文件 ===
+# AI & tool config
+.claude/
+.cli/
+.agent/
+prompts/
+CLAUDE.md
+
+# Project config & temp
+.project/
+.tmp/
+logs/
+
+# SSH keys
+.ssh/
+
+# OS files
 .DS_Store
 Thumbs.db
-*.swp
-*.swo
-*~
 
-# === Lua 编译缓存 ===
-*.luac
-
-# === meta 文件（引擎生成） ===
+# Meta files
 *.meta

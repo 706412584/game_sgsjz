@@ -257,9 +257,15 @@ end
 ---@param evtData table|nil
 local function sendEvt(userId, evtType, evtData)
     if not SendToClient_ then return end
+    local ok, jsonStr = pcall(cjson.encode, evtData or {})
+    if not ok then
+        print("[服务端] sendEvt JSON编码失败! evtType=" .. evtType .. " err=" .. tostring(jsonStr))
+        return
+    end
+    print("[服务端] sendEvt: " .. evtType .. " jsonLen=" .. #jsonStr)
     local data = VariantMap()
     data["Type"]     = Variant(evtType)
-    data["DataJson"] = Variant(cjson.encode(evtData or {}))
+    data["DataJson"] = Variant(jsonStr)
     SendToClient_(userId, EVENTS.GAME_EVT, data)
 end
 
@@ -417,6 +423,11 @@ ACTION_HANDLERS["battle"] = function(userId, params)
     end
 
     -- 推送战斗结果事件
+    print("[服务端] battle: win=" .. tostring(battleLog.result.win)
+        .. " #rounds=" .. #(battleLog.rounds or {})
+        .. " totalRounds=" .. (battleLog.totalRounds or 0)
+        .. " #allies=" .. #(battleLog.allies or {})
+        .. " #enemies=" .. #(battleLog.enemies or {}))
     sendEvt(userId, "battle_result", {
         win          = battleLog.result.win,
         stars        = battleLog.result.stars,

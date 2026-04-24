@@ -266,8 +266,17 @@ function HandleGameEvt(eventType, eventData)
     local evtType = eventData["Type"]:GetString()
     local dataJson = eventData["DataJson"]:GetString()
     local ok, data = pcall(cjson.decode, dataJson)
-    if not ok then data = {} end
-    print("[ClientNet] GameEvt: " .. evtType)
+    if not ok then
+        print("[Battle] GameEvt JSON解码失败: " .. tostring(data))
+        data = {}
+    end
+    if evtType == "battle_result" then
+        print("[Battle] 收到battle_result jsonLen=" .. #dataJson
+            .. " rounds=" .. tostring(data.rounds ~= nil)
+            .. " #rounds=" .. (data.rounds and tostring(#data.rounds) or "nil")
+            .. " allies=" .. tostring(data.allies ~= nil)
+            .. " totalRounds=" .. tostring(data.totalRounds))
+    end
 
     -- 转发到业务模块（后续由 client_main.lua 注册处理器）
     if M.onGameEvtCallback_ then

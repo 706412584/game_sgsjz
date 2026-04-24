@@ -336,6 +336,10 @@ end
 local function handleGameEvt(evtType, data)
     if evtType == "battle_result" then
         -- 收到战斗结果: 显示战斗回放
+        print("[Battle] battle_result 收到, rounds=" .. tostring(data.rounds ~= nil)
+            .. " #rounds=" .. #(data.rounds or {})
+            .. " allies=" .. #(data.allies or {})
+            .. " enemies=" .. #(data.enemies or {}))
         local log = {
             allies      = data.allies or {},
             enemies     = data.enemies or {},
@@ -353,6 +357,7 @@ local function handleGameEvt(evtType, data)
                 enemyAlive  = data.enemyAlive or 0,
             },
         }
+        print("[Battle] log构建完成 #rounds=" .. #log.rounds .. " totalRounds=" .. log.totalRounds)
         switchPage("battle")
         contentContainer_:ClearChildren()
         contentContainer_:AddChild(BattlePage.Create(log, {
@@ -667,10 +672,7 @@ function HandleUpdate(eventType, eventData)
     if isNetworkMode_ then
         ServerUI.Update(dt)
     end
-
-    if currentPage_ == "battle" then
-        BattlePage.Update(dt)
-    end
+    -- 战斗回放由 page_battle.lua 自主订阅 Update 事件驱动
 end
 
 function Stop()
