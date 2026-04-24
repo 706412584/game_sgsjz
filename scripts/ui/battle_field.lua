@@ -29,7 +29,7 @@ local GROW_CENTER = 5   -- 中线间距
 -- 卡片尺寸上限
 local MAX_CARD_W  = 120
 local MAX_CARD_H  = 150
-local AVATAR_RATIO = 0.78   -- 头像占卡片高度比例
+local AVATAR_RATIO = 0.92   -- 头像占卡片高度比例 (放大立绘)
 
 -- 状态效果中文映射
 local STATUS_NAMES = {
@@ -135,15 +135,10 @@ local function createCard(unit, side, colKey, rowIdx)
     local avatar = UI.Panel {
         width           = avatarSize_,
         height          = avatarSize_,
-        borderRadius    = 8,
-        borderColor     = nameColor,
-        borderWidth     = 2,
         backgroundImage = imgPath,
         backgroundFit   = "contain",
-        backgroundColor = side == "ally" and { 30, 55, 45, 255 } or { 55, 30, 30, 255 },
         justifyContent  = "center",
         alignItems      = "center",
-        transition      = "borderColor 0.2s easeOut",
         children = (not imgPath) and {
             UI.Label {
                 text      = string.sub(unit.name or "?", 1, 6),
@@ -359,16 +354,10 @@ function M.UpdateUnit(unitId, hp, maxHp, morale, statuses, alive)
     end
 end
 
---- 高亮当前行动者 (边框 + 攻击精灵切换)
+--- 高亮当前行动者 (缩放 + 攻击精灵切换)
 function M.HighlightUnit(unitId)
-    -- 恢复上一个高亮单位的边框
-    if lastHighlight_ and unitCards_[lastHighlight_] then
-        local prev = unitCards_[lastHighlight_]
-        prev.avatar:SetStyle({ borderWidth = 2 })
-    end
     local info = unitCards_[unitId]
     if info then
-        info.avatar:SetStyle({ borderWidth = 4 })
 
         -- 攻击精灵切换动画
         if info.spriteAtk then
