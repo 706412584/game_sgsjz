@@ -74,6 +74,7 @@ M.ROLE_NAMES = {
 ---@field skillDesc string
 ---@field passive string|nil      -- 被动技能名称
 ---@field passiveDesc string|nil  -- 被动技能描述
+---@field lore string|nil         -- 人物列传
 ---@field evolve string|nil
 ---@field avatar string|nil
 
@@ -95,6 +96,7 @@ M.HEROES = {
         skillDesc = "无",
         passive = "奸雄",
         passiveDesc = "战法增伤12%并为全队回怒",
+        lore    = "挟天子以令诸侯，一代枭雄，文武兼备，奠定曹魏基业。",
         evolve  = "乱世曹操",
     },
     xiaohoudun = {
@@ -105,9 +107,9 @@ M.HEROES = {
         stats   = { tong = 96, yong = 88, zhi = 56 },
         caps    = { tong = 230, yong = 210, zhi = 165 },
         skill   = "拔矢啖睛",
-        skillDesc = "对前排单体造成200%物理伤害，被攻击时60%概率反击",
+        skillDesc = "对前排单体造成160%物理伤害，被攻击时30%概率反击",
         passive = "刚烈",
-        passiveDesc = "被攻击时60%概率反击",
+        passiveDesc = "被攻击时30%概率反击",
         evolve  = nil,
     },
     zhangliao = {
@@ -349,9 +351,9 @@ M.HEROES = {
         stats   = { tong = 76, yong = 98, zhi = 56 },
         caps    = { tong = 198, yong = 232, zhi = 160 },
         skill   = "百骑劫营",
-        skillDesc = "对单体造成280%物理伤害，本次攻击暴击率+25%",
+        skillDesc = "对单体造成180%物理伤害，本次攻击暴击率+15%",
         passive = "锦帆",
-        passiveDesc = "暴击率+25%",
+        passiveDesc = "暴击率+15%",
         evolve  = nil,
     },
     taishici = {
@@ -401,9 +403,9 @@ M.HEROES = {
         stats   = { tong = 78, yong = 94, zhi = 65 },
         caps    = { tong = 195, yong = 225, zhi = 170 },
         skill   = "烈弓连珠",
-        skillDesc = "对随机3个敌军单体各造成160%物理伤害，15%概率附灼烧持续2回合",
+        skillDesc = "对随机2个敌军单体各造成145%物理伤害",
         passive = "烈弓",
-        passiveDesc = "攻击多目标并附灼烧",
+        passiveDesc = "攻击可命中多个目标",
         evolve  = nil,
     },
 

@@ -10,6 +10,7 @@ local Modal  = require("ui.modal_manager")
 local DH     = require("data.data_heroes")
 local DT     = require("data.data_troops")
 local DS     = require("data.data_state")
+local HeroPopup = require("ui.popup_hero_detail")
 local C      = Theme.colors
 local S      = Theme.sizes
 
@@ -308,11 +309,34 @@ local function buildDetailPanel(heroId, heroState)
                     gap            = 3,
                     justifyContent = "center",
                     children = {
-                        UI.Label {
-                            text       = db.name,
-                            fontSize   = Theme.fontSize.headline,
-                            fontColor  = qColor,
-                            fontWeight = "bold",
+                        UI.Panel {
+                            flexDirection = "row",
+                            alignItems    = "center",
+                            gap           = 8,
+                            children = {
+                                UI.Label {
+                                    text       = db.name,
+                                    fontSize   = Theme.fontSize.headline,
+                                    fontColor  = qColor,
+                                    fontWeight = "bold",
+                                },
+                                UI.Button {
+                                    text            = "详情",
+                                    width           = 44,
+                                    height          = 22,
+                                    fontSize        = 10,
+                                    fontWeight      = "bold",
+                                    textColor       = C.gold,
+                                    backgroundColor = { C.gold[1], C.gold[2], C.gold[3], 30 },
+                                    hoverBackgroundColor = { C.gold[1], C.gold[2], C.gold[3], 60 },
+                                    borderColor     = C.gold,
+                                    borderWidth     = 1,
+                                    borderRadius    = 11,
+                                    onClick = function()
+                                        HeroPopup.Show(heroId, heroState, cachedState_)
+                                    end,
+                                },
+                            },
                         },
                         UI.Panel {
                             flexDirection = "row",

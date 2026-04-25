@@ -112,7 +112,7 @@ local function parseSkillFromDesc(heroId, heroData)
         targetType = TARGET.BACK
     elseif desc:find("随机3") or desc:find("随机三") then
         targetType = TARGET.RANDOM3
-    elseif desc:find("2个目标") or desc:find("双目标") then
+    elseif desc:find("随机2") or desc:find("2个目标") or desc:find("双目标") then
         targetType = TARGET.DOUBLE
     elseif desc:find("最高血量") then
         targetType = TARGET.HIGHEST_HP
@@ -221,8 +221,8 @@ local function parseSkillFromDesc(heroId, heroData)
         skill.extras.killMoraleBonus = tonumber(killMorale)
     end
 
-    -- 反击: "被攻击时反击XX%"
-    local counterPct = desc:match("反击(%d+)%%")
+    -- 反击: "被攻击时反击XX%" 或 "XX%概率反击"
+    local counterPct = desc:match("反击(%d+)%%") or desc:match("(%d+)%%概率反击")
     if counterPct then
         skill.extras.counterRate = tonumber(counterPct) / 100
     end
