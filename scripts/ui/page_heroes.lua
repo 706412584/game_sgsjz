@@ -388,59 +388,14 @@ local function buildDetailPanel(heroId, heroState)
         local troopName = troopData and troopData.name or "未知"
         local catName   = DT.GetHeroCatName(heroId)
 
-        -- 构建兵种描述文本
-        local descParts = {}
-        descParts[#descParts + 1] = "兵种分类：" .. catName .. "系"
-        if troopData then
-            -- 属性加成
-            if troopData.bonuses then
-                local bonusNames = {
-                    atk_pct = "攻击", def_pct = "防御", spd_pct = "速度",
-                    crit_pct = "暴击", dodge_pct = "闪避", hit_pct = "命中",
-                }
-                for k, v in pairs(troopData.bonuses) do
-                    local bName = bonusNames[k] or k
-                    descParts[#descParts + 1] = bName .. "+" .. math.floor(v * 100) .. "%"
-                end
-            end
-            -- 特殊效果
-            if troopData.specials then
-                local specialNames = {
-                    confuse_chance = "混乱概率", defect_chance = "叛逃概率",
-                    heal_pct = "治疗比例", inspire_chance = "振奋概率",
-                    morale_boost = "士气增加", morale_reduce = "降敌士气",
-                    aoe_row = "横排攻击", aoe_line = "纵排攻击",
-                    anti_cavalry = "对骑加伤", anti_archer_def = "弓箭减伤",
-                    counter_rate = "反击概率", flee_chance = "逃兵概率",
-                    block_immune = "被挡免伤",
-                }
-                for k, v in pairs(troopData.specials) do
-                    local sName = specialNames[k] or k
-                    if type(v) == "number" then
-                        descParts[#descParts + 1] = sName .. ": " .. math.floor(v * 100) .. "%"
-                    elseif type(v) == "boolean" and v then
-                        descParts[#descParts + 1] = sName
-                    end
-                end
-            end
-            -- 分类被动
-            local catPassives = DT.GetCatPassives(heroCat)
-            if catPassives and catPassives.morale_immune then
-                descParts[#descParts + 1] = "不受士气影响"
-            end
-            if catPassives and catPassives.dodge_bonus then
-                descParts[#descParts + 1] = "闪避+" .. math.floor(catPassives.dodge_bonus * 100) .. "%"
-            end
-            if catPassives and catPassives.crit_bonus then
-                descParts[#descParts + 1] = "暴击+" .. math.floor(catPassives.crit_bonus * 100) .. "%"
-            end
-        end
+        -- 使用 battleDesc 详细描述
+        local descText = (troopData and troopData.battleDesc) or ("兵种分类：" .. catName .. "系")
 
         detailChildren[#detailChildren + 1] = Comp.SanCard({
-            title = "专属兵种：" .. troopName,
+            title = "专属兵种：" .. troopName .. "（" .. catName .. "系）",
             children = {
                 UI.Label {
-                    text       = table.concat(descParts, "  |  "),
+                    text       = descText,
                     fontSize   = Theme.fontSize.body,
                     fontColor  = C.text,
                     whiteSpace = "normal",
