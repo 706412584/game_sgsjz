@@ -269,8 +269,36 @@ function M.Show(heroId, heroState, fullState)
                 },
             }
 
-            -- 2b. 衍生战斗属性（仅已拥有时显示）
+            -- 兵种分类（提前计算，衍生属性和兵种信息共用）
+            local heroCat = DT.GetHeroCategory(heroId)
+
+            -- 2b. 衍生战斗属性（仅已拥有时显示，按兵种类型过滤）
             if derived then
+                -- 按兵种类型决定显示哪些攻防属性
+                -- 步兵: 普攻/普防
+                -- 骑兵/弓兵/机械: 普攻/普防 + 战攻/战防
+                -- 法术/辅助: 普攻/普防 + 策攻/策防
+                local showSkill = (heroCat == "cavalry" or heroCat == "archer" or heroCat == "siege")
+                local showMagic = (heroCat == "magic" or heroCat == "support")
+
+                local badges = {
+                    statBadge("普攻", derived.atkNormal, C.faction_wei),
+                    statBadge("普防", math.floor(derived.defNormal * 1000), C.faction_wei),
+                }
+                if showSkill then
+                    badges[#badges + 1] = statBadge("战攻", derived.atkSkill, C.red)
+                    badges[#badges + 1] = statBadge("战防", math.floor(derived.defSkill * 1000), C.red)
+                end
+                if showMagic then
+                    badges[#badges + 1] = statBadge("策攻", derived.atkMagic, C.mp)
+                    badges[#badges + 1] = statBadge("策防", math.floor(derived.defMagic * 1000), C.mp)
+                end
+                -- 通用属性始终显示
+                badges[#badges + 1] = statBadge("暴击", fmtPct(derived.critRate), C.gold)
+                badges[#badges + 1] = statBadge("闪避", fmtPct(derived.dodgeRate), C.jade)
+                badges[#badges + 1] = statBadge("反击", fmtPct(derived.counterRate), C.gold)
+                badges[#badges + 1] = statBadge("抵挡", derived.blockImmune and "免疫" or fmtPct(derived.blockRate), C.jade)
+
                 children[#children + 1] = UI.Panel {
                     width           = "100%",
                     backgroundColor = C.panel,
@@ -280,18 +308,7 @@ function M.Show(heroId, heroState, fullState)
                     flexDirection   = "row",
                     flexWrap        = "wrap",
                     justifyContent  = "space-between",
-                    children = {
-                        statBadge("普攻", derived.atkNormal, C.faction_wei),
-                        statBadge("普防", math.floor(derived.defNormal * 1000), C.faction_wei),
-                        statBadge("战攻", derived.atkSkill, C.red),
-                        statBadge("战防", math.floor(derived.defSkill * 1000), C.red),
-                        statBadge("策攻", derived.atkMagic, C.mp),
-                        statBadge("策防", math.floor(derived.defMagic * 1000), C.mp),
-                        statBadge("暴击", fmtPct(derived.critRate), C.gold),
-                        statBadge("闪避", fmtPct(derived.dodgeRate), C.jade),
-                        statBadge("反击", fmtPct(derived.counterRate), C.gold),
-                        statBadge("抵挡", derived.blockImmune and "免疫" or fmtPct(derived.blockRate), C.jade),
-                    },
+                    children        = badges,
                 }
             end
 
@@ -301,7 +318,6 @@ function M.Show(heroId, heroState, fullState)
             local troopKey  = DT.GetHeroTroop(heroId)
             local troopData = troopKey and DT.Get(troopKey) or nil
             local catName   = DT.GetHeroCatName(heroId)
-            local heroCat   = DT.GetHeroCategory(heroId)
 
             children[#children + 1] = sectionTitle("兵种")
 

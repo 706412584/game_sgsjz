@@ -23,6 +23,7 @@ local detailPanel_
 local filterTabContainer_
 local selectedHeroId_
 local currentFilter_    = "all"   -- "all"|"wei"|"shu"|"wu"|"qun"
+local currentCatFilter_ = "all"   -- "all"|"infantry"|"cavalry"|"archer"|"magic"|"support"|"siege"
 local cachedState_
 local onLineupChange_
 
@@ -35,6 +36,16 @@ local FILTER_TABS = {
     { id = "qun", name = "群"   },
 }
 
+-- 兵种分类筛选标签
+local CAT_FILTER_TABS = {
+    { id = "all",      name = "全部" },
+    { id = "infantry", name = "步兵" },
+    { id = "cavalry",  name = "骑兵" },
+    { id = "archer",   name = "弓兵" },
+    { id = "magic",    name = "法术" },
+    { id = "support",  name = "辅助" },
+}
+
 -- 势力颜色
 local FACTION_COLORS = {
     wei = C.faction_wei,
@@ -44,60 +55,110 @@ local FACTION_COLORS = {
 }
 
 ------------------------------------------------------------
--- 构建势力筛选标签行
+-- 构建筛选标签行（通用）
 ------------------------------------------------------------
-local function buildFilterTabs()
+local function buildTabRow(tabs, currentId, colorFn, onSelect)
     local children = {}
-    for _, tab in ipairs(FILTER_TABS) do
-        local isActive = (tab.id == currentFilter_)
-        local tabColor = tab.id ~= "all" and FACTION_COLORS[tab.id] or C.jade
+    for _, tab in ipairs(tabs) do
+        local isActive = (tab.id == currentId)
+        local tabColor = colorFn(tab)
 
         children[#children + 1] = UI.Panel {
-            height          = 28,
-            paddingHorizontal = 10,
+            height          = 26,
+            paddingHorizontal = 8,
             justifyContent  = "center",
             alignItems      = "center",
             backgroundColor = isActive and tabColor or { 0, 0, 0, 0 },
-            borderRadius    = 14,
+            borderRadius    = 13,
             borderColor     = tabColor,
             borderWidth     = 1,
             transition      = "backgroundColor 0.15s easeOut",
             onClick = function()
-                currentFilter_ = tab.id
-                selectedHeroId_ = nil
-                M.RefreshList()
-                M.RefreshDetail(nil, nil)
+                onSelect(tab.id)
             end,
             children = {
                 UI.Label {
                     text      = tab.name,
-                    fontSize  = Theme.fontSize.bodySmall,
+                    fontSize  = Theme.fontSize.caption,
                     fontColor = isActive and C.bg or C.text,
                     fontWeight = isActive and "bold" or "normal",
                 },
             },
         }
     end
+    return children
+end
+
+local function buildFilterTabs()
+    -- 势力筛选行
+    local factionChildren = buildTabRow(FILTER_TABS, currentFilter_, function(tab)
+        return tab.id ~= "all" and FACTION_COLORS[tab.id] or C.jade
+    end, function(id)
+        currentFilter_ = id
+        selectedHeroId_ = nil
+        M.RefreshList()
+        M.RefreshDetail(nil, nil)
+    end)
+
+    -- 兵种分类筛选行
+    local catChildren = buildTabRow(CAT_FILTER_TABS, currentCatFilter_, function(_)
+        return C.gold
+    end, function(id)
+        currentCatFilter_ = id
+        selectedHeroId_ = nil
+        M.RefreshList()
+        M.RefreshDetail(nil, nil)
+    end)
 
     return UI.Panel {
         width             = "100%",
-        flexDirection     = "row",
-        gap               = 6,
+        flexDirection     = "column",
         paddingHorizontal = 8,
-        paddingVertical   = 6,
-        children          = children,
+        paddingTop        = 6,
+        paddingBottom     = 2,
+        gap               = 4,
+        children = {
+            UI.Panel {
+                width         = "100%",
+                flexDirection = "row",
+                gap           = 6,
+                children      = factionChildren,
+            },
+            UI.Panel {
+                width         = "100%",
+                flexDirection = "row",
+                gap           = 4,
+                flexWrap      = "wrap",
+                children      = catChildren,
+            },
+        },
     }
 end
 
 ------------------------------------------------------------
--- 获取筛选后的英雄列表
+-- 获取筛选后的英雄列表（势力 + 兵种分类双重筛选）
 ------------------------------------------------------------
 local function getFilteredHeroes()
+    local base
     if currentFilter_ == "all" then
-        return DH.GetSortedList()
+        base = DH.GetSortedList()
     else
-        return DH.GetByFaction(currentFilter_)
+        base = DH.GetByFaction(currentFilter_)
     end
+
+    -- 兵种分类筛选
+    if currentCatFilter_ == "all" then
+        return base
+    end
+
+    local result = {}
+    for _, entry in ipairs(base) do
+        local cat = DT.GetHeroCategory(entry.id)
+        if cat == currentCatFilter_ then
+            result[#result + 1] = entry
+        end
+    end
+    return result
 end
 
 ------------------------------------------------------------
