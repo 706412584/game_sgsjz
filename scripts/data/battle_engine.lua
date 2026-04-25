@@ -901,9 +901,13 @@ local function executeAction(actor, allUnits)
     local isConfused = actor.statuses[STATUS.CHARM] ~= nil
 
     -- 判断是否释放战法(士气>=100且有heroId且未沉默)
+    -- 非战法将(法术/辅助/机械系)不消耗士气、不触发战法
     local useSkill = false
     local skill = nil
-    if actor.heroId and actor.morale >= M.MORALE_MAX then
+    local isSkillHero = actor.troopCat == DT.CAT_INFANTRY
+                     or actor.troopCat == DT.CAT_CAVALRY
+                     or actor.troopCat == DT.CAT_ARCHER
+    if actor.heroId and actor.morale >= M.MORALE_MAX and isSkillHero then
         if not actor.statuses[STATUS.SILENCE] then
             useSkill = true
             skill = M.GetSkill(actor.heroId)
