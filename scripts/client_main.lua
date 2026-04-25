@@ -126,20 +126,33 @@ local function switchPage(pageId)
         contentContainer_:AddChild(MapPage.Create(gs(), {
             onNodeClick = function(mapId, nodeId, nodeType)
                 if nodeType == "event" then
-                    Modal.Alert("事件", "你发现了一个机关，获得铜钱 200！")
                     if isNetworkMode_ then
-                        -- TODO: 事件节点由服务端处理
+                        ClientNet.SendAction("event_node", {
+                            mapId = mapId, nodeId = nodeId,
+                        })
                     else
                         gs().copper = gs().copper + 200
+                        gs().nodeStars[mapId .. "_" .. nodeId] = 3
                         HUD.Update(gs())
+                        Modal.Alert("事件", "你发现了一个机关，获得铜钱 200！", function()
+                            MapPage.Refresh(gs())
+                        end)
                     end
                     return
                 end
                 if nodeType == "chest" then
-                    Modal.Alert("宝箱", "打开宝箱获得经验酒 x3！")
-                    if not isNetworkMode_ then
+                    if isNetworkMode_ then
+                        ClientNet.SendAction("chest_node", {
+                            mapId = mapId, nodeId = nodeId,
+                        })
+                    else
+                        gs().inventory = gs().inventory or {}
+                        gs().inventory.exp_wine = (gs().inventory.exp_wine or 0) + 3
                         gs().nodeStars[mapId .. "_" .. nodeId] = 3
-                        MapPage.Refresh(gs())
+                        HUD.Update(gs())
+                        Modal.Alert("宝箱", "打开宝箱获得经验酒 x3！", function()
+                            MapPage.Refresh(gs())
+                        end)
                     end
                     return
                 end
@@ -409,6 +422,30 @@ local function handleGameEvt(evtType, data)
             ShopPage.Refresh(gs())
         end
         HUD.Update(gs())
+
+    elseif evtType == "event_result" then
+        if data.success then
+            HUD.Update(gs())
+            Modal.Alert("事件", data.msg or "事件完成！", function()
+                if currentPage_ == "map" then
+                    MapPage.Refresh(gs())
+                end
+            end)
+        else
+            Modal.Alert("提示", data.msg or "事件处理失败")
+        end
+
+    elseif evtType == "chest_result" then
+        if data.success then
+            HUD.Update(gs())
+            Modal.Alert("宝箱", data.msg or "宝箱已打开！", function()
+                if currentPage_ == "map" then
+                    MapPage.Refresh(gs())
+                end
+            end)
+        else
+            Modal.Alert("提示", data.msg or "宝箱打开失败")
+        end
 
     elseif evtType == "action_result" then
         if not data.success then

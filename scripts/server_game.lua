@@ -450,6 +450,61 @@ ACTION_HANDLERS["battle"] = function(userId, params)
     sendSync(userId)
 end
 
+--- event_node: 事件节点（获得铜钱）
+ACTION_HANDLERS["event_node"] = function(userId, params)
+    local state = players_[userId]
+    local mapId  = params.mapId or 1
+    local nodeId = params.nodeId or 1
+
+    local key = mapId .. "_" .. nodeId
+    if state.nodeStars[key] and state.nodeStars[key] >= 3 then
+        sendEvt(userId, "error", { msg = "该事件已完成" })
+        return
+    end
+
+    local copperReward = 200
+    state.copper = (state.copper or 0) + copperReward
+    state.nodeStars[key] = 3
+    dirty_[userId] = true
+
+    sendEvt(userId, "event_result", {
+        success = true,
+        mapId   = mapId,
+        nodeId  = nodeId,
+        copper  = copperReward,
+        msg     = "你发现了一个机关，获得铜钱 " .. copperReward .. "！",
+    })
+    sendSync(userId)
+end
+
+--- chest_node: 宝箱节点（获得经验酒）
+ACTION_HANDLERS["chest_node"] = function(userId, params)
+    local state = players_[userId]
+    local mapId  = params.mapId or 1
+    local nodeId = params.nodeId or 1
+
+    local key = mapId .. "_" .. nodeId
+    if state.nodeStars[key] and state.nodeStars[key] >= 3 then
+        sendEvt(userId, "error", { msg = "该宝箱已打开" })
+        return
+    end
+
+    local wineReward = 3
+    state.inventory = state.inventory or {}
+    state.inventory.exp_wine = (state.inventory.exp_wine or 0) + wineReward
+    state.nodeStars[key] = 3
+    dirty_[userId] = true
+
+    sendEvt(userId, "chest_result", {
+        success  = true,
+        mapId    = mapId,
+        nodeId   = nodeId,
+        expWine  = wineReward,
+        msg      = "打开宝箱获得经验酒 x" .. wineReward .. "！",
+    })
+    sendSync(userId)
+end
+
 --- use_exp_wine: 使用经验酒
 ACTION_HANDLERS["use_exp_wine"] = function(userId, params)
     local state = players_[userId]
