@@ -1,6 +1,6 @@
 ------------------------------------------------------------
 -- ui/popup_hero_detail.lua  —— 武将详情弹窗（通用）
--- 参考风云天下风格：头像+基础信息/兵种/战法/三围/列传
+-- 风云天下风格：头像+属性(含衍生战斗属性)+兵种+战法+列传
 ------------------------------------------------------------
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
@@ -25,20 +25,28 @@ local FACTION_COLORS = {
 }
 
 ------------------------------------------------------------
--- 辅助：属性行（标签 + 数值）
+-- 凹陷徽章（风云天下风格：深色底+内阴影边框）
 ------------------------------------------------------------
-local function attrRow(label, value, color)
+local BADGE_BG    = { 22, 28, 42, 255 }   -- 极深底色
+local BADGE_BORDER = { 14, 18, 30, 255 }   -- 更深边框模拟内凹
+
+local function statBadge(label, value, color)
     return UI.Panel {
-        flexDirection = "row",
-        alignItems    = "center",
-        justifyContent = "space-between",
-        width         = "100%",
-        paddingHorizontal = 4,
-        height        = 22,
+        width           = "48%",
+        flexDirection   = "row",
+        justifyContent  = "space-between",
+        alignItems      = "center",
+        backgroundColor = BADGE_BG,
+        borderColor     = BADGE_BORDER,
+        borderWidth     = 1,
+        borderRadius    = 4,
+        paddingHorizontal = 6,
+        paddingVertical   = 3,
+        marginBottom    = 3,
         children = {
             UI.Label {
                 text      = label,
-                fontSize  = Theme.fontSize.bodySmall,
+                fontSize  = Theme.fontSize.caption,
                 fontColor = C.textDim,
             },
             UI.Label {
@@ -52,12 +60,44 @@ local function attrRow(label, value, color)
 end
 
 ------------------------------------------------------------
+-- 三围行（宽版，带 base/cap 显示）
+------------------------------------------------------------
+local function triStatRow(label, base, cap, color)
+    return UI.Panel {
+        width           = "100%",
+        flexDirection   = "row",
+        justifyContent  = "space-between",
+        alignItems      = "center",
+        backgroundColor = BADGE_BG,
+        borderColor     = BADGE_BORDER,
+        borderWidth     = 1,
+        borderRadius    = 4,
+        paddingHorizontal = 6,
+        paddingVertical   = 3,
+        marginBottom    = 3,
+        children = {
+            UI.Label {
+                text      = label,
+                fontSize  = Theme.fontSize.caption,
+                fontColor = C.textDim,
+            },
+            UI.Label {
+                text       = tostring(base) .. " / " .. tostring(cap),
+                fontSize   = Theme.fontSize.bodySmall,
+                fontColor  = color or C.text,
+                fontWeight = "bold",
+            },
+        },
+    }
+end
+
+------------------------------------------------------------
 -- 辅助：分隔标题
 ------------------------------------------------------------
 local function sectionTitle(text)
     return UI.Panel {
-        width     = "100%",
-        marginTop = 8,
+        width        = "100%",
+        marginTop    = 8,
         marginBottom = 4,
         children = {
             UI.Label {
@@ -72,6 +112,13 @@ local function sectionTitle(text)
             },
         },
     }
+end
+
+------------------------------------------------------------
+-- 格式化百分比
+------------------------------------------------------------
+local function fmtPct(v)
+    return string.format("%.1f%%", (v or 0) * 100)
 end
 
 ------------------------------------------------------------
@@ -100,6 +147,12 @@ function M.Show(heroId, heroState, fullState)
         heroPower = DS.CalcHeroPower(heroId, heroState)
     end
 
+    -- 衍生战斗属性
+    local derived = nil
+    if owned then
+        derived = DS.CalcDerivedStats(heroId, heroState)
+    end
+
     Modal.Show({
         title = db.name .. " - 武将详情",
         width = 420,
@@ -116,20 +169,17 @@ function M.Show(heroId, heroState, fullState)
                 width         = "100%",
                 alignItems    = "center",
                 children = {
-                    -- 大头像
                     Comp.HeroAvatar({
                         heroId  = heroId,
                         size    = S.heroAvatarLg,
                         quality = db.quality,
                     }),
-                    -- 右侧信息列
                     UI.Panel {
                         flexGrow      = 1,
                         flexShrink    = 1,
                         flexDirection = "column",
                         gap           = 3,
                         children = {
-                            -- 名字 + 品质标签
                             UI.Panel {
                                 flexDirection = "row",
                                 alignItems    = "center",
@@ -152,7 +202,6 @@ function M.Show(heroId, heroState, fullState)
                                     },
                                 },
                             },
-                            -- 阵营 + 定位
                             UI.Panel {
                                 flexDirection = "row",
                                 gap           = 8,
@@ -169,7 +218,6 @@ function M.Show(heroId, heroState, fullState)
                                     },
                                 },
                             },
-                            -- 等级/星级/战力（已拥有时）
                             owned and UI.Panel {
                                 flexDirection = "row",
                                 gap           = 10,
@@ -203,7 +251,52 @@ function M.Show(heroId, heroState, fullState)
             }
 
             --------------------------------------------------------
-            -- 2. 兵种信息
+            -- 2. 属性（三围 + 衍生战斗属性）
+            --------------------------------------------------------
+            children[#children + 1] = sectionTitle("属性")
+
+            -- 2a. 基础三围（始终显示 base/cap）
+            children[#children + 1] = UI.Panel {
+                width           = "100%",
+                backgroundColor = C.panel,
+                borderRadius    = 6,
+                padding         = 6,
+                gap             = 0,
+                children = {
+                    triStatRow("统率", db.stats.tong, db.caps.tong, C.faction_wei),
+                    triStatRow("勇武", db.stats.yong, db.caps.yong, C.red),
+                    triStatRow("智力", db.stats.zhi,  db.caps.zhi,  C.mp),
+                },
+            }
+
+            -- 2b. 衍生战斗属性（仅已拥有时显示）
+            if derived then
+                children[#children + 1] = UI.Panel {
+                    width           = "100%",
+                    backgroundColor = C.panel,
+                    borderRadius    = 6,
+                    padding         = 6,
+                    marginTop       = 4,
+                    flexDirection   = "row",
+                    flexWrap        = "wrap",
+                    justifyContent  = "space-between",
+                    children = {
+                        statBadge("普攻", derived.atkNormal, C.faction_wei),
+                        statBadge("普防", fmtPct(derived.defNormal), C.faction_wei),
+                        statBadge("战攻", derived.atkSkill, C.red),
+                        statBadge("战防", fmtPct(derived.defSkill), C.red),
+                        statBadge("策攻", derived.atkMagic, C.mp),
+                        statBadge("策防", fmtPct(derived.defMagic), C.mp),
+                        statBadge("暴击", fmtPct(derived.critRate), C.gold),
+                        statBadge("闪避", fmtPct(derived.dodgeRate), C.jade),
+                        statBadge("反击", fmtPct(derived.counterRate), C.gold),
+                        statBadge("抵挡", derived.blockImmune and "免疫" or fmtPct(derived.blockRate), C.jade),
+                    },
+                }
+            end
+
+            --------------------------------------------------------
+            -- 3. 兵种信息
             --------------------------------------------------------
             local troopKey  = DT.GetHeroTroop(heroId)
             local troopData = troopKey and DT.Get(troopKey) or nil
@@ -241,7 +334,7 @@ function M.Show(heroId, heroState, fullState)
             end
 
             --------------------------------------------------------
-            -- 3. 战法 + 被动
+            -- 4. 战法 + 被动
             --------------------------------------------------------
             local isSkillHero = (heroCat == "infantry" or heroCat == "cavalry" or heroCat == "archer")
 
@@ -270,7 +363,6 @@ function M.Show(heroId, heroState, fullState)
                     },
                 }
             else
-                -- 兵种将没有战法
                 children[#children + 1] = sectionTitle("战法")
                 children[#children + 1] = UI.Panel {
                     width           = "100%",
@@ -287,7 +379,6 @@ function M.Show(heroId, heroState, fullState)
                 }
             end
 
-            -- 被动技能
             if db.passive then
                 children[#children + 1] = sectionTitle("被动")
                 children[#children + 1] = UI.Panel {
@@ -315,31 +406,14 @@ function M.Show(heroId, heroState, fullState)
             end
 
             --------------------------------------------------------
-            -- 4. 三围属性
-            --------------------------------------------------------
-            children[#children + 1] = sectionTitle("属性")
-            children[#children + 1] = UI.Panel {
-                width           = "100%",
-                backgroundColor = C.panel,
-                borderRadius    = 6,
-                padding         = 8,
-                gap             = 2,
-                children = {
-                    attrRow("统率（普攻伤害）", db.stats.tong .. " / " .. db.caps.tong, C.faction_wei),
-                    attrRow("勇武（战法伤害）", db.stats.yong .. " / " .. db.caps.yong, C.red),
-                    attrRow("智力（法攻伤害）", db.stats.zhi  .. " / " .. db.caps.zhi,  C.mp),
-                },
-            }
-
-            --------------------------------------------------------
             -- 5. 进阶信息
             --------------------------------------------------------
             if db.evolve then
                 children[#children + 1] = UI.Panel {
-                    flexDirection = "row",
-                    alignItems    = "center",
-                    gap           = 6,
-                    marginTop     = 6,
+                    flexDirection     = "row",
+                    alignItems        = "center",
+                    gap               = 6,
+                    marginTop         = 6,
                     paddingHorizontal = 4,
                     children = {
                         UI.Label {
@@ -380,12 +454,14 @@ function M.Show(heroId, heroState, fullState)
             end
 
             --------------------------------------------------------
-            -- 组合返回
+            -- 组合返回（flexShrink 防溢出，隐藏滚动条）
             --------------------------------------------------------
             return UI.ScrollView {
-                width     = "100%",
-                maxHeight = 400,
-                scrollY   = true,
+                width      = "100%",
+                flexGrow   = 1,
+                flexShrink = 1,
+                scrollY    = true,
+                showScrollbar = false,
                 children = {
                     UI.Panel {
                         width         = "100%",

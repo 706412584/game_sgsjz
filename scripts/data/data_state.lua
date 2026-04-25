@@ -6,6 +6,7 @@
 local DH = require("data.data_heroes")
 local DM = require("data.data_maps")
 local DE = require("data.data_equip")
+local DT = require("data.data_troops")
 local TS = require("data.treasure_state")
 
 local M = {}
@@ -596,12 +597,132 @@ function M.ComposeHero(state, heroId)
 end
 
 ------------------------------------------------------------
+-- 衍生属性计算
+------------------------------------------------------------
+
+--- 计算英雄10项衍生战斗属性
+--- 公式来源: battle_engine.lua 伤害/暴击/闪避公式
+---@param heroId string
+---@param heroState table|nil
+---@return table|nil  { tong, yong, zhi, atkNormal, defNormal, atkSkill, defSkill, atkMagic, defMagic, critRate, dodgeRate, counterRate, blockRate }
+function M.CalcDerivedStats(heroId, heroState)
+    if not heroState or (heroState.level or 0) <= 0 then return nil end
+    local hd = DH.HEROES[heroId]
+    if not hd then return nil end
+
+    local level = heroState.level or 1
+
+    -- 三围成长: base + (cap - base) * (level / 80)
+    local growthFactor = math.min(level / 80, 1.0)
+    local tong = hd.stats.tong + (hd.caps.tong - hd.stats.tong) * growthFactor
+    local yong = hd.stats.yong + (hd.caps.yong - hd.stats.yong) * growthFactor
+    local zhi  = hd.stats.zhi  + (hd.caps.zhi  - hd.stats.zhi)  * growthFactor
+
+    -- 装备主属性加成(flat)
+    local equipCrit  = 0
+    local equipDodge = 0
+    if heroState.equips then
+        local equipAttrs = DE.CalcAllEquipAttrs(heroState.equips)
+        tong = tong + (equipAttrs.tong or 0)
+        yong = yong + (equipAttrs.yong or 0)
+        zhi  = zhi  + (equipAttrs.zhi or 0)
+        -- 装备百分比加成
+        if equipAttrs.atk_pct and equipAttrs.atk_pct > 0 then
+            yong = yong * (1 + equipAttrs.atk_pct)
+        end
+        if equipAttrs.def_pct and equipAttrs.def_pct > 0 then
+            tong = tong * (1 + equipAttrs.def_pct)
+        end
+        equipCrit  = equipAttrs.crit or 0
+        equipDodge = equipAttrs.dodge or 0
+    end
+
+    -- 兵种加成
+    local troopCrit  = 0
+    local troopDodge = 0
+    local troopKey = DT.GetHeroTroop(heroId)
+    local troopCat = nil
+    if troopKey then
+        local troopData = DT.Get(troopKey)
+        if troopData then
+            troopCat = troopData.category
+            local b = troopData.bonuses or {}
+            if b.atk_pct then yong = yong * (1 + b.atk_pct) end
+            if b.def_pct then tong = tong * (1 + b.def_pct) end
+            troopCrit  = b.crit_pct or 0
+            troopDodge = b.dodge_pct or 0
+        end
+    end
+
+    -- 兵种分类被动
+    local catPassives = troopCat and DT.GetCatPassives(troopCat) or {}
+    troopCrit  = troopCrit  + (catPassives.crit_bonus or 0)
+    troopDodge = troopDodge + (catPassives.dodge_bonus or 0)
+
+    tong = math.floor(tong)
+    yong = math.floor(yong)
+    zhi  = math.floor(zhi)
+
+    -- 普攻 = 统 * 3
+    local atkNormal = tong * 3
+    -- 普防 = 统减伤率 (capped at 0.6)
+    local defNormal = math.min(tong * 0.005, 0.6)
+    -- 战攻 = 勇 * 3
+    local atkSkill  = yong * 3
+    -- 战防 = 勇减伤率 (capped at 0.55)
+    local defSkill  = math.min(yong * 0.004, 0.55)
+    -- 策攻 = 智 * 3
+    local atkMagic  = zhi * 3
+    -- 策防 = 智减伤率 (capped at 0.5)
+    local defMagic  = math.min(zhi * 0.004, 0.5)
+
+    -- 暴击率 = 0.08 + 兵种暴击 + 装备暴击 + 勇武溢出
+    local critRate = 0.08 + troopCrit + equipCrit
+    if yong > 100 then critRate = critRate + (yong - 100) * 0.001 end
+
+    -- 闪避率 = 兵种闪避 + 装备闪避
+    local dodgeRate = troopDodge + equipDodge
+
+    -- 反击率: 从被动/战法描述解析 (与 battle_engine parseSkill 逻辑一致)
+    local counterRate = 0
+    local checkDescs = { hd.skillDesc or "", hd.passiveDesc or "" }
+    for _, desc in ipairs(checkDescs) do
+        local pct = desc:match("(%d+)%%概率反击") or desc:match("反击(%d+)%%")
+        if pct then
+            counterRate = tonumber(pct) / 100
+            break
+        end
+    end
+
+    -- 抵挡率: 目前无数值体系，仅标记弓兵免疫
+    local blockRate = 0
+    local blockImmune = catPassives.block_immune or false
+
+    return {
+        tong        = tong,
+        yong        = yong,
+        zhi         = zhi,
+        atkNormal   = atkNormal,
+        defNormal   = defNormal,
+        atkSkill    = atkSkill,
+        defSkill    = defSkill,
+        atkMagic    = atkMagic,
+        defMagic    = defMagic,
+        critRate    = critRate,
+        dodgeRate   = dodgeRate,
+        counterRate = counterRate,
+        blockRate   = blockRate,
+        blockImmune = blockImmune,
+    }
+end
+
+------------------------------------------------------------
 -- 战力计算
 ------------------------------------------------------------
 
 --- 计算单个英雄战力
 function M.CalcHeroPower(heroId, heroState)
-    if not heroState or heroState.level <= 0 then return 0 end
+    if not heroState or (heroState.level or 0) <= 0 then return 0 end
     local heroData = DH.HEROES[heroId]
     if not heroData then return 0 end
 
