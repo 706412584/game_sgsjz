@@ -335,7 +335,7 @@ function M.ShowCritBanner(x, y, value, animDelay)
     local label = UI.Label {
         text       = "暴击 " .. dmgText,
         fontSize   = 18,
-        fontColor  = { 30, 10, 10, 255 },
+        fontColor  = { 255, 220, 60, 255 },
         fontWeight = "bold",
         textAlign  = "center",
         pointerEvents = "none",
