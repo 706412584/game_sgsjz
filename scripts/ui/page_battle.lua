@@ -9,6 +9,7 @@ local Comp   = require("ui.components")
 local Modal  = require("ui.modal_manager")
 local BField = require("ui.battle_field")
 local BFX    = require("ui.battle_effects")
+local DT     = require("data.data_troops")
 local C      = Theme.colors
 local S      = Theme.sizes
 
@@ -102,6 +103,7 @@ local function showActionEffects(action)
     if action.type == "skill" and action.name and actorId then
         local aPos = BField.GetUnitPos(actorId)
         if aPos then BFX.ShowSkillName(aPos.x, aPos.y - 10, action.name) end
+        BField.ShowSkillTitle(actorId, action.name)
     end
 
     -- 反击提示
@@ -177,6 +179,11 @@ local function showActionEffects(action)
 
     -- extras 特殊机制视觉反馈 (闪避/斩杀/免死/吸血/追击/增怒/减怒/降智/免控)
     if action.extras then
+        local troopShownFor = {}  -- 每个单位只显示一次兵种名
+        local TROOP_EXTRAS = {
+            dodge = true, execute = true, death_immune = true,
+            lifesteal = true, pursuit = true, immune_control = true,
+        }
         for _, ex in ipairs(action.extras) do
             local exType = ex.type
             -- 确定显示位置：有 target 的显示在目标上，否则显示在攻击者上
@@ -189,6 +196,15 @@ local function showActionEffects(action)
                 showUnit = actorId and unitById_[actorId] or nil
             end
             if showUnit then
+                -- 兵种特性触发: 头顶显示兵种名（每单位仅一次）
+                if TROOP_EXTRAS[exType] and not troopShownFor[showUnit.id] then
+                    local tpName = DT.GetHeroTroopName(showUnit.heroId)
+                    if tpName then
+                        BField.ShowSkillTitle(showUnit.id, tpName, {120,255,220,255})
+                        troopShownFor[showUnit.id] = true
+                    end
+                end
+
                 local pos = BField.GetUnitPos(showUnit.id)
                 if pos then
                     BFX.ShowExtra(pos.x, pos.y, exType, ex)

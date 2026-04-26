@@ -1,6 +1,7 @@
 ------------------------------------------------------------
--- ui/battle_effects.lua  —— 战斗浮动特效
--- 伤害数字、暴击、击杀、技能名、治疗 — TTL 生命周期管理
+-- ui/battle_effects.lua  —— 战斗浮动特效 (增强版)
+-- 伤害数字(多段散射)、暴击(红墨横幅)、击杀、技能水墨横幅、
+-- 治疗粒子(++上浮)、extras浮字 — TTL 生命周期管理
 ------------------------------------------------------------
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
@@ -15,36 +16,141 @@ local container_  -- 特效容器 (absolute, 100%, pointerEvents=none)
 local effects_ = {} -- { { widget, ttl, elapsed } }
 
 ------------------------------------------------------------
+-- 内部: 注册一个带生命周期的控件
+------------------------------------------------------------
+local function registerFx(widget, ttl)
+    effects_[#effects_ + 1] = {
+        widget  = widget,
+        ttl     = ttl,
+        elapsed = 0,
+    }
+end
+
+------------------------------------------------------------
 -- 工具: 创建浮动 Label 并播放动画
 ------------------------------------------------------------
-local function spawnLabel(x, y, text, fontSize, fontColor, ttl, animConfig)
+local function spawnLabel(x, y, text, fontSize, fontColor, ttl, animConfig, extraStyle)
     if not container_ then return end
 
+    local style = {
+        text          = text,
+        fontSize      = fontSize,
+        fontColor     = fontColor,
+        fontWeight    = "bold",
+        textAlign     = "center",
+        position      = "absolute",
+        left          = math.floor(x - 50),
+        top           = math.floor(y - 20),
+        width         = 100,
+        pointerEvents = "none",
+    }
+
+    if extraStyle then
+        for k, v in pairs(extraStyle) do style[k] = v end
+    end
+
+    local label = UI.Label(style)
+    container_:AddChild(label)
+
+    if animConfig then
+        label:Animate(animConfig)
+    end
+
+    registerFx(label, ttl)
+    return label
+end
+
+------------------------------------------------------------
+-- 工具: 创建水墨横幅 (图片+文字叠加)
+------------------------------------------------------------
+local function spawnInkBanner(x, y, text, brushImage, textColor, ttl)
+    if not container_ then return end
+
+    local bannerW = 200
+    local bannerH = 50
+
+    local banner = UI.Panel {
+        position        = "absolute",
+        left            = math.floor(x - bannerW / 2),
+        top             = math.floor(y - bannerH / 2),
+        width           = bannerW,
+        height          = bannerH,
+        backgroundImage = brushImage,
+        backgroundFit   = "fill",
+        justifyContent  = "center",
+        alignItems      = "center",
+        pointerEvents   = "none",
+    }
+
     local label = UI.Label {
-        text      = text,
-        fontSize  = fontSize,
-        fontColor = fontColor,
+        text       = text,
+        fontSize   = 18,
+        fontColor  = textColor,
         fontWeight = "bold",
-        textAlign = "center",
-        position  = "absolute",
-        left      = math.floor(x - 40),
-        top       = math.floor(y - 20),
-        width     = 80,
+        textAlign  = "center",
+        pointerEvents = "none",
+    }
+
+    banner:AddChild(label)
+    container_:AddChild(banner)
+
+    -- 横向展开 + 渐显 → 停留 → 渐隐上飘
+    banner:Animate({
+        keyframes = {
+            [0]    = { scaleX = 0.3, scaleY = 0.6, opacity = 0, translateY = 0 },
+            [0.15] = { scaleX = 1.15, scaleY = 1.0, opacity = 1, translateY = 0 },
+            [0.25] = { scaleX = 1.0, scaleY = 1.0, opacity = 1, translateY = 0 },
+            [0.7]  = { scaleX = 1.0, scaleY = 1.0, opacity = 1, translateY = -5 },
+            [1]    = { scaleX = 1.0, scaleY = 1.0, opacity = 0, translateY = -20 },
+        },
+        duration = ttl,
+        easing   = "easeOut",
+        fillMode = "forwards",
+    })
+
+    registerFx(banner, ttl)
+    return banner
+end
+
+------------------------------------------------------------
+-- 工具: 生成一个治疗粒子 (+)
+------------------------------------------------------------
+local function spawnHealParticle(x, y, char, color, ttl)
+    if not container_ then return end
+
+    local ox = math.random(-20, 20)
+    local oy = math.random(-5, 10)
+    local sz = math.random(10, 16)
+    local drift = math.random(-8, 8)
+
+    local label = UI.Label {
+        text          = char,
+        fontSize      = sz,
+        fontColor     = color,
+        fontWeight    = "bold",
+        textAlign     = "center",
+        position      = "absolute",
+        left          = math.floor(x + ox - 10),
+        top           = math.floor(y + oy - 10),
+        width         = 20,
         pointerEvents = "none",
     }
 
     container_:AddChild(label)
 
-    -- 播放动画
-    if animConfig then
-        label:Animate(animConfig)
-    end
+    label:Animate({
+        keyframes = {
+            [0]   = { translateY = 0, translateX = 0, opacity = 0, scale = 0.5 },
+            [0.1] = { translateY = -5, translateX = drift * 0.2, opacity = 1, scale = 1.0 },
+            [0.5] = { translateY = -30, translateX = drift * 0.6, opacity = 0.9, scale = 1.0 },
+            [1]   = { translateY = -55, translateX = drift, opacity = 0, scale = 0.6 },
+        },
+        duration = ttl,
+        easing   = "easeOut",
+        fillMode = "forwards",
+    })
 
-    effects_[#effects_ + 1] = {
-        widget  = label,
-        ttl     = ttl,
-        elapsed = 0,
-    }
+    registerFx(label, ttl)
 end
 
 ------------------------------------------------------------
@@ -57,88 +163,158 @@ function M.Init(parent)
     effects_ = {}
 end
 
---- 显示伤害数字
+--- 显示伤害数字 (增强版: 多段散射 + 暴击红墨横幅)
 ---@param x number 屏幕X
 ---@param y number 屏幕Y
 ---@param value number 伤害值
 ---@param isCrit boolean 是否暴击
 function M.ShowDamage(x, y, value, isCrit)
-    local text = tostring(math.floor(value))
+    local dmgText = tostring(math.floor(value))
+
     if isCrit then
-        -- 暴击: 金色大字 + 弹跳
-        spawnLabel(x, y, text, 22, C.gold, 1.2, {
-            keyframes = {
-                { scale = 1.5, translateY = 0, opacity = 1 },
-                { scale = 1.0, translateY = -30, opacity = 1 },
-                { scale = 1.0, translateY = -50, opacity = 0 },
-            },
-            duration = 1.2,
-            easing   = "easeOut",
-            fillMode = "forwards",
-        })
+        -- 暴击: 红色水墨横幅 + 黑色暴击文字
+        spawnInkBanner(x, y - 35, "暴击 " .. dmgText,
+            "Textures/ui/ink_brush_red.png",
+            { 30, 10, 10, 255 }, 1.4)
+
+        -- 附加散射碎片数字 (3~4段小数字飞散)
+        local fragments = math.random(3, 4)
+        local fragVal = math.floor(value / fragments)
+        for f = 1, fragments do
+            local fx = x + math.random(-30, 30)
+            local fy = y + math.random(-10, 15)
+            local delay = f * 0.05
+            spawnLabel(fx, fy, "-" .. fragVal,
+                math.random(11, 14),
+                { 255, 80 + math.random(0, 60), 60, 255 },
+                1.0,
+                {
+                    keyframes = {
+                        [0]   = { scale = 0.3, translateY = 0, opacity = 0 },
+                        [0.15] = { scale = 1.2, translateY = -3, opacity = 1 },
+                        [0.4] = { scale = 1.0, translateY = -15, opacity = 0.8 },
+                        [1]   = { scale = 0.8, translateY = -40, opacity = 0 },
+                    },
+                    duration = 0.9,
+                    easing   = "easeOut",
+                    fillMode = "forwards",
+                    delay    = delay,
+                })
+        end
     else
-        -- 普通: 白色上浮淡出
-        spawnLabel(x, y, text, 16, C.text, 0.8, {
-            keyframes = {
-                { translateY = 0, opacity = 1 },
-                { translateY = -40, opacity = 0 },
-            },
-            duration = 0.8,
-            easing   = "easeOut",
-            fillMode = "forwards",
-        })
+        -- 普通伤害: 主数字 + 散射小数字
+        -- 主数字: 红白色, 弹出放大再缩回
+        spawnLabel(x, y, "-" .. dmgText, 18,
+            { 255, 220, 210, 255 }, 1.0,
+            {
+                keyframes = {
+                    [0]    = { scale = 0.5, translateY = 0, opacity = 0 },
+                    [0.1]  = { scale = 1.3, translateY = -5, opacity = 1 },
+                    [0.25] = { scale = 1.0, translateY = -10, opacity = 1 },
+                    [0.6]  = { scale = 1.0, translateY = -25, opacity = 0.7 },
+                    [1]    = { scale = 0.9, translateY = -45, opacity = 0 },
+                },
+                duration = 1.0,
+                easing   = "easeOut",
+                fillMode = "forwards",
+            })
+
+        -- 2个散射碎片
+        for f = 1, 2 do
+            local fx = x + math.random(-25, 25)
+            local fy = y + math.random(-5, 10)
+            spawnLabel(fx, fy, "-" .. math.floor(value / 3),
+                math.random(9, 12),
+                { 255, 160, 140, 220 },
+                0.7,
+                {
+                    keyframes = {
+                        [0]   = { scale = 0.4, translateY = 0, opacity = 0 },
+                        [0.2] = { scale = 1.0, translateY = -8, opacity = 0.8 },
+                        [1]   = { scale = 0.6, translateY = -30, opacity = 0 },
+                    },
+                    duration = 0.7,
+                    easing   = "easeOut",
+                    fillMode = "forwards",
+                    delay    = f * 0.06,
+                })
+        end
     end
 end
 
---- 显示治疗数字
+--- 显示治疗 (增强版: 主数字 + 一堆 ++ 粒子上浮)
 function M.ShowHeal(x, y, value)
-    local text = "+" .. tostring(math.floor(value))
-    spawnLabel(x, y, text, 16, C.hp, 0.8, {
-        keyframes = {
-            { translateY = 0, opacity = 1 },
-            { translateY = -40, opacity = 0 },
-        },
-        duration = 0.8,
-        easing   = "easeOut",
-        fillMode = "forwards",
-    })
+    -- 主治疗数字: 绿色, 放大弹出
+    spawnLabel(x, y, "+" .. math.floor(value), 18,
+        { 100, 255, 130, 255 }, 1.0,
+        {
+            keyframes = {
+                [0]    = { scale = 0.5, translateY = 0, opacity = 0 },
+                [0.12] = { scale = 1.3, translateY = -5, opacity = 1 },
+                [0.3]  = { scale = 1.0, translateY = -12, opacity = 1 },
+                [0.7]  = { scale = 1.0, translateY = -30, opacity = 0.7 },
+                [1]    = { scale = 0.9, translateY = -50, opacity = 0 },
+            },
+            duration = 1.0,
+            easing   = "easeOut",
+            fillMode = "forwards",
+        })
+
+    -- 粒子群: 6~8 个 "+" 符号, 黄绿/绿色, 不同大小, 向上飘散
+    local particleCount = math.random(6, 8)
+    local greens = {
+        { 100, 255, 130, 255 },
+        { 140, 255, 100, 255 },
+        { 180, 255, 80,  255 },
+        { 200, 255, 120, 230 },
+        { 120, 230, 90,  255 },
+    }
+    for p = 1, particleCount do
+        local color = greens[math.random(1, #greens)]
+        local char = (math.random() > 0.4) and "+" or "++"
+        local ttl = 0.6 + math.random() * 0.5
+        spawnHealParticle(x, y - 5, char, color, ttl)
+    end
 end
 
---- 显示击杀提示
+--- 显示击杀提示 (增强: 放大震动)
 function M.ShowKill(x, y, name)
-    spawnLabel(x, y, "击杀!", 20, C.red, 1.0, {
+    spawnLabel(x, y, "击杀!", 22, C.red, 1.2, {
         keyframes = {
-            { scale = 1.8, opacity = 1 },
-            { scale = 1.0, opacity = 1 },
-            { scale = 1.0, opacity = 0 },
+            [0]    = { scale = 2.0, opacity = 0, rotate = -5 },
+            [0.15] = { scale = 1.1, opacity = 1, rotate = 2 },
+            [0.3]  = { scale = 1.0, opacity = 1, rotate = 0 },
+            [0.7]  = { scale = 1.0, opacity = 1, rotate = 0 },
+            [1]    = { scale = 1.0, opacity = 0, rotate = 0 },
         },
-        duration = 1.0,
-        easing   = "easeOut",
+        duration = 1.2,
+        easing   = "easeOutBack",
         fillMode = "forwards",
     })
 end
 
---- 显示技能名
+--- 显示技能名 — 黑色水墨横幅 + 金色技能名文字
 function M.ShowSkillName(x, y, name)
-    spawnLabel(x, y - 30, name, 14, C.gold, 1.0, {
-        keyframes = {
-            { scale = 0.5, opacity = 0 },
-            { scale = 1.1, opacity = 1 },
-            { scale = 1.0, opacity = 1 },
-            { scale = 1.0, opacity = 0 },
-        },
-        duration = 1.0,
-        easing   = "easeOut",
-        fillMode = "forwards",
-    })
+    spawnInkBanner(x, y - 40, name,
+        "Textures/ui/ink_brush_black.png",
+        { 255, 220, 120, 255 }, 1.3)
+end
+
+--- 显示兵种特性名 — 黑色水墨横幅 + 青色文字
+function M.ShowTroopPassive(x, y, name)
+    spawnInkBanner(x, y - 40, name,
+        "Textures/ui/ink_brush_black.png",
+        { 120, 255, 220, 255 }, 1.2)
 end
 
 --- 显示状态效果
 function M.ShowStatus(x, y, statusName)
     spawnLabel(x, y + 20, statusName, 12, { 200, 180, 100, 255 }, 0.8, {
         keyframes = {
-            { translateY = 0, opacity = 1 },
-            { translateY = -20, opacity = 0 },
+            [0]   = { scale = 0.5, translateY = 0, opacity = 0 },
+            [0.15] = { scale = 1.1, translateY = 0, opacity = 1 },
+            [0.3]  = { scale = 1.0, translateY = -5, opacity = 1 },
+            [1]    = { scale = 1.0, translateY = -20, opacity = 0 },
         },
         duration = 0.8,
         easing   = "easeOut",
@@ -173,24 +349,23 @@ function M.ShowExtra(x, y, extraType, extraData)
     if not cfg then return end
 
     local text = cfg.text
-    -- 吸血显示数值
     if extraType == "lifesteal" and extraData and extraData.heal then
         text = "吸血+" .. math.floor(extraData.heal)
     end
-    -- 追击显示伤害
     if extraType == "pursuit" and extraData and extraData.damage then
         text = "追击!" .. math.floor(extraData.damage)
     end
 
-    -- 偏移避免和伤害数字重叠
     local ox = math.random(-10, 10)
     local oy = -35 + math.random(-5, 5)
 
     spawnLabel(x + ox, y + oy, text, cfg.size, cfg.color, 1.0, {
         keyframes = {
-            { scale = 0.6, translateY = 0, opacity = 0 },
-            { scale = 1.1, translateY = -5, opacity = 1 },
-            { scale = 1.0, translateY = -25, opacity = 0 },
+            [0]    = { scale = 0.6, translateY = 0, opacity = 0 },
+            [0.12] = { scale = 1.2, translateY = -3, opacity = 1 },
+            [0.3]  = { scale = 1.0, translateY = -8, opacity = 1 },
+            [0.7]  = { scale = 1.0, translateY = -18, opacity = 0.7 },
+            [1]    = { scale = 0.9, translateY = -30, opacity = 0 },
         },
         duration = 1.0,
         easing   = "easeOut",
@@ -205,7 +380,6 @@ function M.Update(dt)
         local fx = effects_[i]
         fx.elapsed = fx.elapsed + dt
         if fx.elapsed >= fx.ttl then
-            -- 过期: 移除
             if container_ and fx.widget then
                 container_:RemoveChild(fx.widget)
             end

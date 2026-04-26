@@ -446,7 +446,6 @@ function M.FlashSkillGlow(unitId)
     local info = unitCards_[unitId]
     if not info or not info.panel then return end
 
-    -- 用整张卡片做金色闪烁 (borderColor + scale脉冲)
     info.panel:Animate({
         keyframes = {
             [0]    = { scale = 1.0, opacity = 1.0 },
@@ -459,6 +458,63 @@ function M.FlashSkillGlow(unitId)
         duration = 0.6,
         easing   = "easeOut",
     })
+end
+
+--- 在武将卡牌头顶显示技能/兵种名称 (加粗, 渐显→停留→渐隐)
+---@param unitId number
+---@param text string 技能名或兵种特性名
+---@param color table|nil fontColor, 默认金色
+function M.ShowSkillTitle(unitId, text, color)
+    local info = unitCards_[unitId]
+    if not info or not info.panel then return end
+
+    -- 去掉旧的 title (如果连续释放)
+    if info._skillTitle then
+        pcall(function() info.panel:RemoveChild(info._skillTitle) end)
+        info._skillTitle = nil
+    end
+
+    local titleColor = color or { 255, 220, 120, 255 }
+    local titleLabel = UI.Label {
+        text       = text,
+        fontSize   = 12,
+        fontColor  = titleColor,
+        fontWeight = "bold",
+        textAlign  = "center",
+        position   = "absolute",
+        top        = -18,
+        left       = -10,
+        width      = cardW_ + 20,
+        pointerEvents = "none",
+    }
+
+    info.panel:AddChild(titleLabel)
+    info._skillTitle = titleLabel
+
+    titleLabel:Animate({
+        keyframes = {
+            [0]    = { opacity = 0, scale = 0.6, translateY = 5 },
+            [0.15] = { opacity = 1, scale = 1.15, translateY = 0 },
+            [0.3]  = { opacity = 1, scale = 1.0, translateY = -2 },
+            [0.7]  = { opacity = 1, scale = 1.0, translateY = -2 },
+            [1]    = { opacity = 0, scale = 0.9, translateY = -8 },
+        },
+        duration = 1.3,
+        easing   = "easeOut",
+        fillMode = "forwards",
+    })
+
+    -- 1.4 秒后自动清理
+    atkTimers_[#atkTimers_ + 1] = {
+        unitId    = unitId,
+        remaining = 1.4,
+        onDone    = function()
+            if info._skillTitle == titleLabel then
+                pcall(function() info.panel:RemoveChild(titleLabel) end)
+                info._skillTitle = nil
+            end
+        end,
+    }
 end
 
 --- 获取单位卡牌中心位置 (估算, 供特效定位)
@@ -489,9 +545,15 @@ function M.TickTimers(dt)
         local t = atkTimers_[i]
         t.remaining = t.remaining - dt
         if t.remaining <= 0 then
-            local info = unitCards_[t.unitId]
-            if info and info.avatar and info.spriteIdle then
-                info.avatar:SetStyle({ backgroundImage = info.spriteIdle })
+            if t.onDone then
+                -- 自定义回调 (如技能标题清理)
+                pcall(t.onDone)
+            else
+                -- 默认: 恢复 idle 精灵
+                local info = unitCards_[t.unitId]
+                if info and info.avatar and info.spriteIdle then
+                    info.avatar:SetStyle({ backgroundImage = info.spriteIdle })
+                end
             end
             table.remove(atkTimers_, i)
         else
