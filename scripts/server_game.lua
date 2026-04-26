@@ -414,9 +414,10 @@ ACTION_HANDLERS["battle"] = function(userId, params)
                 zhi    = u.zhi,
                 hp     = u.hp,
                 maxHp  = u.maxHp,
-                morale = u.morale or 0,
-                level  = u.level,
-                alive  = u.alive,
+                morale   = u.morale or 0,
+                level    = u.level,
+                alive    = u.alive,
+                troopCat = u.troopCat,
             }
         end
         return out
