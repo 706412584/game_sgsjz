@@ -89,10 +89,22 @@ local function showActionEffects(action)
     local actorId = action.actorId
     if actorId then BField.HighlightUnit(actorId) end
 
+    -- 更新攻击者的士气
+    if actorId and action.actorMorale then
+        local ast = unitState_[actorId]
+        if ast then
+            ast.morale = action.actorMorale
+            BField.UpdateUnit(actorId, ast.hp, ast.maxHp,
+                ast.morale, ast.statuses, ast.alive)
+        end
+    end
+
     if action.type == "skill" and action.name and actorId then
         local aPos = BField.GetUnitPos(actorId)
         if aPos then BFX.ShowSkillName(aPos.x, aPos.y - 10, action.name) end
     end
+
+    local targetMorales = action.targetMorales or {}
 
     for i = 1, #targets do
         local tName = targets[i]
@@ -124,6 +136,11 @@ local function showActionEffects(action)
             if killed[i] then
                 if pos then BFX.ShowKill(pos.x, pos.y + 20, tName) end
                 if st then st.alive = false; st.hp = 0 end
+            end
+
+            -- 同步目标士气
+            if st and targetMorales[i] then
+                st.morale = targetMorales[i]
             end
 
             -- 更新卡牌 UI (用影子状态)

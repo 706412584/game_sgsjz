@@ -1211,6 +1211,21 @@ local function executeAction(actor, allUnits)
         end
     end
 
+    -- 记录 action 结束后各单位的 morale 快照，供客户端回放
+    action.actorMorale = actor.morale or 0
+    local targetMorales = {}
+    for i = 1, #action.targets do
+        local tName = action.targets[i]
+        for _, u in ipairs(allUnits) do
+            if u.name == tName then
+                targetMorales[i] = u.morale or 0
+                break
+            end
+        end
+        if not targetMorales[i] then targetMorales[i] = 0 end
+    end
+    action.targetMorales = targetMorales
+
     return action
 end
 
