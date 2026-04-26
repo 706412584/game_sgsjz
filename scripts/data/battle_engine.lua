@@ -1450,41 +1450,29 @@ function M.BuildEnemyTeam(mapId, nodeIdx, nodeType)
     local units = {}
 
     if nodeType == "boss" then
-        -- Boss节点: 3前(Boss+2肉盾) + 3中 + 3后
+        -- Boss节点: 2前(Boss+肉盾) + 1中 + 2后 = 5人
         units[#units + 1] = M.CreateSoldierUnit(boss,   mapId, "enemy", "front", basePower * 1.5)
         units[#units + 1] = M.CreateSoldierUnit(sol(1), mapId, "enemy", "front", basePower * 0.9)
-        units[#units + 1] = M.CreateSoldierUnit(sol(2), mapId, "enemy", "front", basePower * 0.85)
-        units[#units + 1] = M.CreateSoldierUnit(sol(3), mapId, "enemy", "mid",   basePower * 0.8)
-        units[#units + 1] = M.CreateSoldierUnit(sol(4), mapId, "enemy", "mid",   basePower * 0.75)
-        units[#units + 1] = M.CreateSoldierUnit(sol(5), mapId, "enemy", "mid",   basePower * 0.7)
-        units[#units + 1] = M.CreateSoldierUnit(sol(6), mapId, "enemy", "back",  basePower * 0.65)
-        units[#units + 1] = M.CreateSoldierUnit(sol(7), mapId, "enemy", "back",  basePower * 0.6)
-        units[#units + 1] = M.CreateSoldierUnit(sol(8), mapId, "enemy", "back",  basePower * 0.55)
+        units[#units + 1] = M.CreateSoldierUnit(sol(2), mapId, "enemy", "mid",   basePower * 0.8)
+        units[#units + 1] = M.CreateSoldierUnit(sol(3), mapId, "enemy", "back",  basePower * 0.7)
+        units[#units + 1] = M.CreateSoldierUnit(sol(4), mapId, "enemy", "back",  basePower * 0.6)
     elseif nodeType == "elite" then
-        -- 精英: 精英守将 + 8小兵
+        -- 精英: 精英守将 + 4小兵 = 5人, 2前+1中+2后
         local eliteName = #elites > 0 and elites[((nodeIdx - 1) % #elites) + 1] or "精英守将"
         units[#units + 1] = M.CreateSoldierUnit(eliteName, mapId, "enemy", "front", basePower * 1.2)
         units[#units + 1] = M.CreateSoldierUnit(sol(1), mapId, "enemy", "front", basePower * 0.85)
-        units[#units + 1] = M.CreateSoldierUnit(sol(2), mapId, "enemy", "front", basePower * 0.8)
-        units[#units + 1] = M.CreateSoldierUnit(sol(3), mapId, "enemy", "mid",   basePower * 0.75)
-        units[#units + 1] = M.CreateSoldierUnit(sol(4), mapId, "enemy", "mid",   basePower * 0.7)
-        units[#units + 1] = M.CreateSoldierUnit(sol(5), mapId, "enemy", "mid",   basePower * 0.65)
-        units[#units + 1] = M.CreateSoldierUnit(sol(6), mapId, "enemy", "back",  basePower * 0.6)
-        units[#units + 1] = M.CreateSoldierUnit(sol(7), mapId, "enemy", "back",  basePower * 0.55)
-        units[#units + 1] = M.CreateSoldierUnit(sol(8), mapId, "enemy", "back",  basePower * 0.5)
+        units[#units + 1] = M.CreateSoldierUnit(sol(2), mapId, "enemy", "mid",   basePower * 0.75)
+        units[#units + 1] = M.CreateSoldierUnit(sol(3), mapId, "enemy", "back",  basePower * 0.65)
+        units[#units + 1] = M.CreateSoldierUnit(sol(4), mapId, "enemy", "back",  basePower * 0.55)
     else
-        -- 普通: 从小兵池轮换, 3+3+3
+        -- 普通: 从小兵池轮换, 2前+1中+2后 = 5人
         local g = ((nodeIdx - 1) % #soldiers) + 1
         local function solR(offset) return soldiers[((g + offset - 1) % #soldiers) + 1] or ("敌兵" .. offset) end
         units[#units + 1] = M.CreateSoldierUnit(solR(0), mapId, "enemy", "front", basePower * 1.0)
         units[#units + 1] = M.CreateSoldierUnit(solR(1), mapId, "enemy", "front", basePower * 0.85)
-        units[#units + 1] = M.CreateSoldierUnit(solR(2), mapId, "enemy", "front", basePower * 0.75)
-        units[#units + 1] = M.CreateSoldierUnit(solR(3), mapId, "enemy", "mid",   basePower * 0.7)
-        units[#units + 1] = M.CreateSoldierUnit(solR(4), mapId, "enemy", "mid",   basePower * 0.65)
-        units[#units + 1] = M.CreateSoldierUnit(solR(5), mapId, "enemy", "mid",   basePower * 0.6)
-        units[#units + 1] = M.CreateSoldierUnit(solR(6), mapId, "enemy", "back",  basePower * 0.55)
-        units[#units + 1] = M.CreateSoldierUnit(solR(7), mapId, "enemy", "back",  basePower * 0.5)
-        units[#units + 1] = M.CreateSoldierUnit(solR(8), mapId, "enemy", "back",  basePower * 0.45)
+        units[#units + 1] = M.CreateSoldierUnit(solR(2), mapId, "enemy", "mid",   basePower * 0.7)
+        units[#units + 1] = M.CreateSoldierUnit(solR(3), mapId, "enemy", "back",  basePower * 0.55)
+        units[#units + 1] = M.CreateSoldierUnit(solR(4), mapId, "enemy", "back",  basePower * 0.45)
     end
 
     assignRowIdx(units)
@@ -1497,11 +1485,11 @@ end
 ---@return BattleUnit[]
 function M.BuildDefaultEnemyTeam(mapId, nodeType)
     local power = 1000 + mapId * 100
-    local names = { "敌兵甲", "敌兵乙", "敌兵丙", "敌兵丁", "敌兵戊", "敌兵己", "敌兵庚", "敌兵辛", "敌兵壬" }
-    local rowMap = { "front", "front", "front", "mid", "mid", "mid", "back", "back", "back" }
-    local pctMap = { 1.0, 0.85, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45 }
+    local names  = { "敌兵甲", "敌兵乙", "敌兵丙", "敌兵丁", "敌兵戊" }
+    local rowMap = { "front", "front", "mid", "back", "back" }
+    local pctMap = { 1.0, 0.85, 0.7, 0.55, 0.45 }
     local units = {}
-    for i = 1, 9 do
+    for i = 1, 5 do
         units[#units + 1] = M.CreateSoldierUnit(names[i], mapId, "enemy", rowMap[i], power * pctMap[i])
     end
     assignRowIdx(units)
