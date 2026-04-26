@@ -277,7 +277,32 @@ function M.Show(heroId, heroState, fullState)
                 padding         = 6,
                 gap             = 0,
                 children = {
-                    triStatRow("兵力", totalHp, db.stats.hp or 3000, C.hp),
+                    UI.Panel {
+                        width           = "100%",
+                        flexDirection   = "row",
+                        justifyContent  = "space-between",
+                        alignItems      = "center",
+                        backgroundColor = BADGE_BG,
+                        borderColor     = BADGE_BORDER,
+                        borderWidth     = 1,
+                        borderRadius    = 4,
+                        paddingHorizontal = 6,
+                        paddingVertical   = 3,
+                        marginBottom    = 3,
+                        children = {
+                            UI.Label {
+                                text      = "兵力",
+                                fontSize  = Theme.fontSize.caption,
+                                fontColor = C.textDim,
+                            },
+                            UI.Label {
+                                text       = tostring(totalHp),
+                                fontSize   = Theme.fontSize.bodySmall,
+                                fontColor  = C.hp,
+                                fontWeight = "bold",
+                            },
+                        },
+                    },
                     triStatRow("统率", db.stats.tong, db.caps.tong, C.faction_wei),
                     triStatRow("勇武", db.stats.yong, db.caps.yong, C.red),
                     triStatRow("智力", db.stats.zhi,  db.caps.zhi,  C.mp),
