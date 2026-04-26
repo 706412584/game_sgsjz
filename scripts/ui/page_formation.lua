@@ -715,24 +715,24 @@ function M.Create(gameState, callbacks)
 
     -- 阵容区域
     local formationPanel = UI.Panel {
-        width = "100%", padding = 8, gap = 4, alignItems = "center",
+        width = "100%", padding = 6, gap = 2, alignItems = "center",
         backgroundColor = { C.panel[1], C.panel[2], C.panel[3], 200 }, borderRadius = 8,
         children = {
-            UI.Panel { width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center", marginBottom = 4,
+            UI.Panel { width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center", marginBottom = 2,
                 children = {
                     UI.Label { text = "阵容编辑", fontSize = Theme.fontSize.title, fontColor = C.gold, fontWeight = "bold" },
                     powerLabel_,
                 },
             },
             formationSelector,
-            Comp.SanDivider({ spacing = 4 }),
-            UI.Label { text = "前排 (坦克/近战)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginBottom = 2 },
-            UI.Panel { flexDirection = "row", justifyContent = "center", gap = 12, children = frontSlots },
-            UI.Label { text = "中排 (突击/游击)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginTop = 4, marginBottom = 2 },
-            UI.Panel { flexDirection = "row", justifyContent = "center", gap = 12, children = midSlots },
-            UI.Label { text = "后排 (输出/辅助)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginTop = 4, marginBottom = 2 },
-            UI.Panel { flexDirection = "row", justifyContent = "center", gap = 12, children = backSlots },
-            UI.Panel { height = 8 }, -- 底部留白
+            Comp.SanDivider({ spacing = 2 }),
+            UI.Label { text = "前排 (坦克/近战)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginBottom = 1 },
+            UI.Panel { flexDirection = "row", justifyContent = "center", gap = 8, children = frontSlots },
+            UI.Label { text = "中排 (突击/游击)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginTop = 2, marginBottom = 1 },
+            UI.Panel { flexDirection = "row", justifyContent = "center", gap = 8, children = midSlots },
+            UI.Label { text = "后排 (输出/辅助)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginTop = 2, marginBottom = 1 },
+            UI.Panel { flexDirection = "row", justifyContent = "center", gap = 8, children = backSlots },
+            UI.Panel { height = 4 }, -- 底部留白
         },
     }
 
@@ -766,17 +766,18 @@ function M.Create(gameState, callbacks)
     heroListContainer_ = UI.Panel { width = "100%", flexDirection = "column", gap = 4, padding = 4 }
     heroListScroll_ = UI.ScrollView { flexGrow = 1, flexBasis = 0, scrollY = true, padding = 4, children = { heroListContainer_ } }
 
-    local leftScroll = UI.ScrollView {
-        width = "45%", flexShrink = 0, scrollY = true,
-        showScrollbar = false,
-        padding = 8, gap = 6,
-        children = { formationPanel, buttonRow },
+    local leftPanel = UI.Panel {
+        width = "45%", flexShrink = 0,
+        padding = 4, gap = 4,
+        flexDirection = "column",
     }
+    leftPanel:AddChild(formationPanel)
+    leftPanel:AddChild(buttonRow)
 
     pagePanel_ = UI.Panel {
         width = "100%", flexGrow = 1, flexBasis = 0, flexDirection = "row", backgroundColor = C.bg,
         children = {
-            leftScroll,
+            leftPanel,
             UI.Panel { width = 1, backgroundColor = C.divider },
             UI.Panel { flexGrow = 1, flexBasis = 0, flexDirection = "column",
                 children = {
