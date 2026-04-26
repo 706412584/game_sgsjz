@@ -68,7 +68,7 @@ local function switchPage(pageId)
     -- 战场全屏：进入战斗隐藏顶栏，退出恢复
     local hp = HUD.GetPanel()
     if hp then
-        if pageId == "battle" then
+        if pageId == "battle" or pageId == "formation" then
             hp:SetVisible(false)
             YGNodeStyleSetDisplay(hp.node, YGDisplayNone)
         else
