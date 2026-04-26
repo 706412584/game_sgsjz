@@ -433,7 +433,7 @@ local function buildDetailPanel(heroId, heroState)
 
         Comp.SanDivider(),
 
-        -- 兵力徽章（总数）
+        -- 兵力 + 三围
         (function()
             local baseHp = db.stats.hp or 3000
             local equipHp = 0
@@ -444,57 +444,17 @@ local function buildDetailPanel(heroId, heroState)
             local troopHp = 0
             local heroCatHp = DT.GetHeroCategory(heroId)
             if heroCatHp then
-                local ta = DT.CalcTroopAttrs(heroCatHp, level)
-                troopHp = ta.hp
+                troopHp = DT.CalcTroopAttrs(heroCatHp, level).hp
             end
             local totalHp = baseHp + equipHp + troopHp
             return UI.Panel {
-                gap = 4,
+                flexDirection  = "row",
+                justifyContent = "space-around",
                 children = {
-                    -- 兵力徽章
-                    UI.Panel {
-                        flexDirection  = "row",
-                        justifyContent = "center",
-                        alignItems     = "center",
-                        marginBottom   = 4,
-                        children = {
-                            UI.Panel {
-                                flexDirection     = "row",
-                                alignItems        = "center",
-                                gap               = 6,
-                                backgroundColor   = { 120, 30, 30, 50 },
-                                borderColor       = C.hp,
-                                borderWidth       = 1,
-                                borderRadius      = 14,
-                                paddingHorizontal = 14,
-                                paddingVertical   = 4,
-                                children = {
-                                    UI.Label {
-                                        text       = "兵力",
-                                        fontSize   = Theme.fontSize.body,
-                                        fontColor  = C.hp,
-                                        fontWeight = "bold",
-                                    },
-                                    UI.Label {
-                                        text       = tostring(totalHp),
-                                        fontSize   = Theme.fontSize.headline,
-                                        fontColor  = C.hp,
-                                        fontWeight = "bold",
-                                    },
-                                },
-                            },
-                        },
-                    },
-                    -- 三围
-                    UI.Panel {
-                        flexDirection  = "row",
-                        justifyContent = "space-around",
-                        children = {
-                            createStatBlock("统", db.stats.tong, db.caps.tong, C.faction_wei),
-                            createStatBlock("勇", db.stats.yong, db.caps.yong, C.red),
-                            createStatBlock("智", db.stats.zhi,  db.caps.zhi,  C.mp),
-                        },
-                    },
+                    createStatBlock("兵", totalHp, baseHp, C.hp),
+                    createStatBlock("统", db.stats.tong, db.caps.tong, C.faction_wei),
+                    createStatBlock("勇", db.stats.yong, db.caps.yong, C.red),
+                    createStatBlock("智", db.stats.zhi,  db.caps.zhi,  C.mp),
                 },
             }
         end)(),

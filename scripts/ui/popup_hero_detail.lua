@@ -252,66 +252,24 @@ function M.Show(heroId, heroState, fullState)
             }
 
             --------------------------------------------------------
-            -- 1.5 兵力徽章（属性之上，独立展示总数）
-            --------------------------------------------------------
-            do
-                local baseHp = db.stats.hp or 3000
-                local equipHp = 0
-                if heroState and heroState.equips then
-                    local ea = DE.CalcAllEquipAttrs(heroState.equips)
-                    equipHp = ea.hp or 0
-                end
-                local troopHp = 0
-                local hpCat = DT.GetHeroCategory(heroId)
-                if hpCat then
-                    local ta = DT.CalcTroopAttrs(hpCat, level)
-                    troopHp = ta.hp
-                end
-                local totalHp = baseHp + equipHp + troopHp
-
-                children[#children + 1] = UI.Panel {
-                    width           = "100%",
-                    flexDirection   = "row",
-                    justifyContent  = "center",
-                    alignItems      = "center",
-                    marginTop       = 8,
-                    marginBottom    = 4,
-                    children = {
-                        UI.Panel {
-                            flexDirection     = "row",
-                            alignItems        = "center",
-                            gap               = 6,
-                            backgroundColor   = { 120, 30, 30, 50 },
-                            borderColor       = C.hp,
-                            borderWidth       = 1,
-                            borderRadius      = 14,
-                            paddingHorizontal = 14,
-                            paddingVertical   = 5,
-                            children = {
-                                UI.Label {
-                                    text       = "兵力",
-                                    fontSize   = Theme.fontSize.body,
-                                    fontColor  = C.hp,
-                                    fontWeight = "bold",
-                                },
-                                UI.Label {
-                                    text       = Theme.FormatNumber(totalHp),
-                                    fontSize   = Theme.fontSize.headline,
-                                    fontColor  = C.hp,
-                                    fontWeight = "bold",
-                                },
-                            },
-                        },
-                    },
-                }
-            end
-
-            --------------------------------------------------------
-            -- 2. 属性（三围 + 衍生战斗属性）
+            -- 2. 属性（兵力 + 三围 + 衍生战斗属性）
             --------------------------------------------------------
             children[#children + 1] = sectionTitle("属性")
 
-            -- 2a. 基础三围（始终显示 base/cap）
+            -- 2a. 兵力 + 基础三围
+            local totalHp = (function()
+                local base = db.stats.hp or 3000
+                local eHp = 0
+                if heroState and heroState.equips then
+                    local ea = DE.CalcAllEquipAttrs(heroState.equips)
+                    eHp = ea.hp or 0
+                end
+                local tHp = 0
+                local hCat = DT.GetHeroCategory(heroId)
+                if hCat then tHp = DT.CalcTroopAttrs(hCat, level).hp end
+                return base + eHp + tHp
+            end)()
+
             children[#children + 1] = UI.Panel {
                 width           = "100%",
                 backgroundColor = C.panel,
@@ -319,6 +277,7 @@ function M.Show(heroId, heroState, fullState)
                 padding         = 6,
                 gap             = 0,
                 children = {
+                    triStatRow("兵力", totalHp, db.stats.hp or 3000, C.hp),
                     triStatRow("统率", db.stats.tong, db.caps.tong, C.faction_wei),
                     triStatRow("勇武", db.stats.yong, db.caps.yong, C.red),
                     triStatRow("智力", db.stats.zhi,  db.caps.zhi,  C.mp),
