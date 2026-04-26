@@ -433,7 +433,7 @@ local function buildDetailPanel(heroId, heroState)
 
         Comp.SanDivider(),
 
-        -- 三围详情 + 兵力（含装备加成）
+        -- 三围详情 + 兵力（含装备+兵种加成）
         (function()
             local baseHp = db.stats.hp or 3000
             local equipHp = 0
@@ -441,11 +441,17 @@ local function buildDetailPanel(heroId, heroState)
                 local equipAttrs = DE.CalcAllEquipAttrs(heroState.equips)
                 equipHp = equipAttrs.hp or 0
             end
-            local totalHp = baseHp + equipHp
-            local hpText = tostring(totalHp)
-            if equipHp > 0 then
-                hpText = tostring(baseHp) .. "+" .. tostring(equipHp)
+            local troopHp = 0
+            local heroCatHp = DT.GetHeroCategory(heroId)
+            if heroCatHp then
+                local ta = DT.CalcTroopAttrs(heroCatHp, level)
+                troopHp = ta.hp
             end
+            local totalHp = baseHp + equipHp + troopHp
+            local hpParts = { tostring(baseHp) }
+            if equipHp > 0 then hpParts[#hpParts + 1] = tostring(equipHp) end
+            if troopHp > 0 then hpParts[#hpParts + 1] = tostring(troopHp) end
+            local hpText = table.concat(hpParts, "+")
             return UI.Panel {
                 gap = 4,
                 children = {
@@ -536,6 +542,45 @@ local function buildDetailPanel(heroId, heroState)
                 },
             },
         })
+    end
+
+    -- 兵种属性加成卡片
+    do
+        local troopCatForAttrs = DT.GetHeroCategory(heroId)
+        if troopCatForAttrs then
+            local ta = DT.CalcTroopAttrs(troopCatForAttrs, level)
+            local attrOrder = { "patk", "pdef", "satk", "sdef", "hp", "spd" }
+            local attrRows = {}
+            for _, key in ipairs(attrOrder) do
+                local val = ta[key] or 0
+                if val > 0 then
+                    attrRows[#attrRows + 1] = UI.Panel {
+                        flexDirection  = "row",
+                        justifyContent = "space-between",
+                        width          = "100%",
+                        children = {
+                            UI.Label {
+                                text      = DT.TROOP_ATTR_NAMES[key] or key,
+                                fontSize  = Theme.fontSize.body,
+                                fontColor = C.textDim,
+                            },
+                            UI.Label {
+                                text       = "+" .. tostring(val),
+                                fontSize   = Theme.fontSize.body,
+                                fontColor  = C.jade,
+                                fontWeight = "bold",
+                            },
+                        },
+                    }
+                end
+            end
+            if #attrRows > 0 then
+                detailChildren[#detailChildren + 1] = Comp.SanCard({
+                    title = "兵种属性（Lv." .. level .. "）",
+                    children = attrRows,
+                })
+            end
+        end
     end
 
     -- 被动技能

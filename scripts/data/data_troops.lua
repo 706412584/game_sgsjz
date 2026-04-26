@@ -26,6 +26,37 @@ M.CAT_NAMES = {
 }
 
 ------------------------------------------------------------
+-- 分类基础属性 & 成长上限 (等级成长公式: base + (cap - base) * level/80)
+-- patk=普攻  pdef=普防  satk=战攻  sdef=战防  hp=额外兵力  spd=速度
+------------------------------------------------------------
+M.CAT_BASE_ATTRS = {
+    infantry = { patk = 1000, pdef = 800, satk = 700, sdef = 900, hp = 500, spd = 80  },
+    cavalry  = { patk = 1100, pdef = 600, satk = 800, sdef = 700, hp = 400, spd = 120 },
+    archer   = { patk = 900,  pdef = 500, satk = 1000,sdef = 600, hp = 300, spd = 100 },
+    siege    = { patk = 1200, pdef = 1000,satk = 600, sdef = 800, hp = 800, spd = 50  },
+    magic    = { patk = 600,  pdef = 400, satk = 1200,sdef = 500, hp = 300, spd = 90  },
+    support  = { patk = 400,  pdef = 700, satk = 500, sdef = 800, hp = 600, spd = 70  },
+}
+
+M.CAT_CAP_ATTRS = {
+    infantry = { patk = 2400, pdef = 2000, satk = 1600, sdef = 2200, hp = 1200, spd = 160 },
+    cavalry  = { patk = 2600, pdef = 1500, satk = 1900, sdef = 1700, hp = 1000, spd = 240 },
+    archer   = { patk = 2200, pdef = 1200, satk = 2400, sdef = 1400, hp = 800,  spd = 200 },
+    siege    = { patk = 2800, pdef = 2400, satk = 1400, sdef = 2000, hp = 1800, spd = 100 },
+    magic    = { patk = 1400, pdef = 1000, satk = 2800, sdef = 1200, hp = 800,  spd = 180 },
+    support  = { patk = 1000, pdef = 1700, satk = 1200, sdef = 2000, hp = 1500, spd = 140 },
+}
+
+M.TROOP_ATTR_NAMES = {
+    patk = "普攻",
+    pdef = "普防",
+    satk = "战攻",
+    sdef = "战防",
+    hp   = "兵力",
+    spd  = "速度",
+}
+
+------------------------------------------------------------
 -- 分类被动特性（战斗中自动生效）
 ------------------------------------------------------------
 -- cavalry  : 所有骑兵都有闪避能力
@@ -408,6 +439,28 @@ end
 ---@return table
 function M.GetCatPassives(category)
     return M.CAT_PASSIVES[category] or {}
+end
+
+--- 计算兵种基础属性(随等级成长)
+--- 公式: base + (cap - base) * (level / 80)
+---@param category string 兵种大类
+---@param level number 武将等级
+---@return table {patk, pdef, satk, sdef, hp, spd}
+function M.CalcTroopAttrs(category, level)
+    local base = M.CAT_BASE_ATTRS[category]
+    local cap  = M.CAT_CAP_ATTRS[category]
+    if not base or not cap then
+        return { patk = 0, pdef = 0, satk = 0, sdef = 0, hp = 0, spd = 0 }
+    end
+    local factor = math.min((level or 1) / 80, 1.0)
+    return {
+        patk = math.floor(base.patk + (cap.patk - base.patk) * factor),
+        pdef = math.floor(base.pdef + (cap.pdef - base.pdef) * factor),
+        satk = math.floor(base.satk + (cap.satk - base.satk) * factor),
+        sdef = math.floor(base.sdef + (cap.sdef - base.sdef) * factor),
+        hp   = math.floor(base.hp   + (cap.hp   - base.hp)   * factor),
+        spd  = math.floor(base.spd  + (cap.spd  - base.spd)  * factor),
+    }
 end
 
 return M

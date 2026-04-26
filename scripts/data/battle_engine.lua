@@ -440,12 +440,19 @@ function M.CreateHeroUnit(heroId, heroState, side, row)
         end
     end
 
-    -- 兵力 = 英雄基础hp + 装备hp加成
+    -- ========== 兵种基础属性成长 ==========
+    local troopAttrs = { patk = 0, pdef = 0, satk = 0, sdef = 0, hp = 0, spd = 0 }
+    if troopCat then
+        troopAttrs = DT.CalcTroopAttrs(troopCat, level)
+    end
+
+    -- 兵力 = 英雄基础hp + 装备hp加成 + 兵种hp加成
     local maxHp = hd.stats.hp or 3000
     if heroState and heroState.equips then
         local equipAttrs = DE.CalcAllEquipAttrs(heroState.equips)
         maxHp = maxHp + (equipAttrs.hp or 0)
     end
+    maxHp = maxHp + troopAttrs.hp
 
     -- 兵种分类被动加成
     local catPassives = troopCat and DT.GetCatPassives(troopCat) or {}
@@ -476,6 +483,12 @@ function M.CreateHeroUnit(heroId, heroState, side, row)
                      + ((troopKey and DT.GetBonuses(troopKey).crit_pct) or 0),
         troopMoraleImmune = catPassives.morale_immune or false,
         troopBlockImmune  = catPassives.block_immune or false,
+        -- 兵种基础属性(普攻/普防/战攻/战防/速度)
+        troopPatk    = troopAttrs.patk,
+        troopPdef    = troopAttrs.pdef,
+        troopSatk    = troopAttrs.satk,
+        troopSdef    = troopAttrs.sdef,
+        troopSpd     = troopAttrs.spd,
     }
 end
 
@@ -528,14 +541,17 @@ local BUFF_SPD_PRIO = 15  -- speed_up 先手加成
 ---@param defender BattleUnit
 ---@return number damage, boolean isCrit
 local function calcBasicDamage(attacker, defender)
-    -- 普攻伤害 = 统 * 3 * (1 - 对方统减伤率)
-    local baseAtk = attacker.tong * 3
+    -- 普攻伤害 = (统 * 3 + 兵种普攻) * (1 - 减伤率)
+    -- 减伤率受对方统 + 兵种普防影响
+    local baseAtk = attacker.tong * 3 + (attacker.troopPatk or 0)
     -- atk_up: 增伤
     if attacker.statuses[STATUS.ATK_UP] then
         baseAtk = baseAtk * (1 + BUFF_ATK_MULT)
     end
 
-    local defRate = math.min(defender.tong * 0.005, 0.6) -- 减伤上限60%
+    -- 普防: 基础减伤 + 兵种普防贡献
+    local defBase = defender.tong * 0.005 + (defender.troopPdef or 0) * 0.0003
+    local defRate = math.min(defBase, 0.6) -- 减伤上限60%
 
     -- def_up: 额外减伤
     if defender.statuses[STATUS.DEF_UP] then
@@ -592,13 +608,16 @@ end
 ---@param multiplier number
 ---@return number damage, boolean isCrit
 local function calcSkillDamage(attacker, defender, multiplier)
-    -- 战法伤害 = 勇 * 3 * multiplier * (1 - 对方勇减伤率)
-    local baseAtk = attacker.yong * 3
+    -- 战法伤害 = (勇 * 3 + 兵种战攻) * multiplier * (1 - 减伤率)
+    -- 减伤率受对方勇 + 兵种战防影响
+    local baseAtk = attacker.yong * 3 + (attacker.troopSatk or 0)
     if attacker.statuses[STATUS.ATK_UP] then
         baseAtk = baseAtk * (1 + BUFF_ATK_MULT)
     end
 
-    local defRate = math.min(defender.yong * 0.004, 0.55)
+    -- 战防: 基础减伤 + 兵种战防贡献
+    local defBase = defender.yong * 0.004 + (defender.troopSdef or 0) * 0.00025
+    local defRate = math.min(defBase, 0.55)
     if defender.statuses[STATUS.DEF_UP] then
         defRate = math.min(defRate + BUFF_DEF_MULT, 0.70)
     end
