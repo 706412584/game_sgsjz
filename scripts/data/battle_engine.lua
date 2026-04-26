@@ -83,8 +83,8 @@ M.EFFECT = EFFECT
 ------------------------------------------------------------
 local function assignRowIndices(count)
     if count <= 0 then return {} end
-    if count == 1 then return { 2 } end
-    if count == 2 then return { 1, 3 } end
+    if count == 1 then return { 1 } end
+    if count == 2 then return { 1, 2 } end
     return { 1, 2, 3 }
 end
 

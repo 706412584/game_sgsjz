@@ -68,11 +68,11 @@ local function calcCardSize(availH)
     return cw, ch, av
 end
 
---- N 个单位分配到 3 行 (居中), 返回行索引数组
+--- N 个单位分配到 3 行, 按顺序从第1行开始排列
 local function assignRows(count)
     if count <= 0 then return {} end
-    if count == 1 then return { 2 } end
-    if count == 2 then return { 1, 3 } end
+    if count == 1 then return { 1 } end
+    if count == 2 then return { 1, 2 } end
     return { 1, 2, 3 }
 end
 
