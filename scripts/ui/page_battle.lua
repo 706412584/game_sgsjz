@@ -559,7 +559,7 @@ function M.Update(dt)
     BField.TickTimers(dt)
 
     roundTimer_ = roundTimer_ + dt * speed_
-    if roundTimer_ < 0.6 then return end
+    if roundTimer_ < 1.0 then return end
     roundTimer_ = 0
 
     local rounds = battleLog_.rounds or {}
