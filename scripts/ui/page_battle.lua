@@ -42,10 +42,6 @@ local unitById_   = {}
 -- 初始值 = 满血满活, 随 action 逐步扣减
 local unitState_ = {}  -- { [id] = { hp, maxHp, morale, alive, statuses } }
 
--- 战场暂停机制: 技能/暴击显示期间暂停回合推进
-local pauseTimer_   = 0    -- > 0 时暂停战场
-local pendingCrit_  = nil  -- { x, y, value } 技能暂停结束后再显示暴击
-
 -- 顶栏兵力条
 local allyHpBar_, enemyHpBar_
 local allyTotalMaxHp_, enemyTotalMaxHp_
@@ -172,25 +168,12 @@ local function showActionEffects(action)
         end
     end
 
-    -- 暂停机制: 技能显示1s → 暴击显示1s，期间冻结回合推进
-    local hasSkill = (action.type == "skill" and action.name and actorId)
-
+    -- 暴击横幅: 在攻击方位置直接显示（不暂停）
     if hasCrit and actorId then
         local aPos = BField.GetUnitPos(actorId)
         if aPos then
-            if hasSkill then
-                -- 技能+暴击: 先暂停1s展示技能，暂停结束后再显示暴击
-                pauseTimer_ = 1.0
-                pendingCrit_ = { x = aPos.x, y = aPos.y, value = critTotalDmg }
-            else
-                -- 仅暴击: 立即显示暴击横幅，暂停1s
-                BFX.ShowCritBanner(aPos.x, aPos.y, critTotalDmg, 0)
-                pauseTimer_ = 1.0
-            end
+            BFX.ShowCritBanner(aPos.x, aPos.y, critTotalDmg, 0)
         end
-    elseif hasSkill then
-        -- 仅技能无暴击: 暂停1s展示技能
-        pauseTimer_ = 1.0
     end
 
     -- 状态效果
@@ -383,9 +366,6 @@ function M.Create(log, callbacks)
     roundTimer_    = 0
     playing_       = true
     speed_         = 1
-    pauseTimer_    = 0
-    pendingCrit_   = nil
-
     print("[Battle] Create: #rounds=" .. #(log.rounds or {})
         .. " #allies=" .. #(log.allies or {})
         .. " #enemies=" .. #(log.enemies or {}))
@@ -593,22 +573,6 @@ function M.Update(dt)
     if not playing_ or not battleLog_ then return end
     BFX.Update(dt)
     BField.TickTimers(dt)
-
-    -- 战场暂停: 技能/暴击显示期间冻结回合推进，动画继续播放
-    if pauseTimer_ > 0 then
-        pauseTimer_ = pauseTimer_ - dt * speed_
-        if pauseTimer_ <= 0 then
-            pauseTimer_ = 0
-            -- 暂停结束: 检查是否有待显示的暴击横幅
-            if pendingCrit_ then
-                local pc = pendingCrit_
-                pendingCrit_ = nil
-                BFX.ShowCritBanner(pc.x, pc.y, pc.value, 0)
-                pauseTimer_ = 1.0  -- 暴击再暂停1s
-            end
-        end
-        return
-    end
 
     roundTimer_ = roundTimer_ + dt * speed_
     if roundTimer_ < 1.0 then return end

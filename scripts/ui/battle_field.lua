@@ -494,20 +494,20 @@ function M.ShowSkillTitle(unitId, text, color)
     titleLabel:Animate({
         keyframes = {
             [0]    = { opacity = 0, scale = 0.6, translateY = 5 },
-            [0.15] = { opacity = 1, scale = 1.15, translateY = 0 },
-            [0.3]  = { opacity = 1, scale = 1.0, translateY = -2 },
-            [0.7]  = { opacity = 1, scale = 1.0, translateY = -2 },
+            [0.12] = { opacity = 1, scale = 1.15, translateY = 0 },
+            [0.25] = { opacity = 1, scale = 1.0, translateY = -2 },
+            [0.75] = { opacity = 1, scale = 1.0, translateY = -2 },
             [1]    = { opacity = 0, scale = 0.9, translateY = -8 },
         },
-        duration = 1.3,
+        duration = 2.0,
         easing   = "easeOut",
         fillMode = "forwards",
     })
 
-    -- 1.4 秒后自动清理
+    -- 2.1 秒后自动清理
     atkTimers_[#atkTimers_ + 1] = {
         unitId    = unitId,
-        remaining = 1.4,
+        remaining = 2.1,
         onDone    = function()
             if info._skillTitle == titleLabel then
                 pcall(function() info.panel:RemoveChild(titleLabel) end)

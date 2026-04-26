@@ -366,7 +366,7 @@ end
 function M.ShowSkillName(x, y, name)
     spawnInkBanner(x, y - 40, name,
         "Textures/ui/ink_brush_black.png",
-        { 255, 220, 120, 255 }, 1.3)
+        { 255, 220, 120, 255 }, 2.0)
 end
 
 --- 显示兵种特性名 — 黑色水墨横幅 + 青色文字

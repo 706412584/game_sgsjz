@@ -649,13 +649,21 @@ local function selectTargets(attacker, allUnits, targetType)
         local back = getAliveUnits(allUnits, enemySide, "back")
         return #back > 0 and back or enemies
     elseif targetType == TARGET.LINE then
-        -- 纵排: 随机选一列(前排1人+后排1人)
+        -- 纵排: 从前排+后排中随机选3个不重复目标
+        local pool = {}
         local front = getAliveUnits(allUnits, enemySide, "front")
         local back  = getAliveUnits(allUnits, enemySide, "back")
+        for _, u in ipairs(front) do pool[#pool + 1] = u end
+        for _, u in ipairs(back)  do pool[#pool + 1] = u end
         local targets = {}
-        if #front > 0 then targets[#targets + 1] = front[math.random(#front)] end
-        if #back  > 0 then targets[#targets + 1] = back[math.random(#back)] end
-        if #targets == 0 then targets = { enemies[math.random(#enemies)] } end
+        for _ = 1, math.min(3, #pool) do
+            local idx = math.random(#pool)
+            targets[#targets + 1] = pool[idx]
+            table.remove(pool, idx)
+        end
+        if #targets == 0 and #enemies > 0 then
+            targets = { enemies[math.random(#enemies)] }
+        end
         return targets
     elseif targetType == TARGET.RANDOM3 then
         local targets = {}
