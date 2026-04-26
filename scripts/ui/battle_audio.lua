@@ -110,6 +110,17 @@ function M.PlayActionSound(action, unitById)
         return
     end
 
+    -- 辅助兵种行动：根据兵种播放治疗/战鼓/舞姬音效
+    if action.type == "support" then
+        local sfxKey = troopKey and TROOP_SFX_MAP[troopKey]
+        if sfxKey then
+            playSfx(sfxKey, 0.6)
+        else
+            playSfx("dancer", 0.5)
+        end
+        return
+    end
+
     -- 普攻 / 其他
     if action.type == "attack" then
         -- 优先匹配具体兵种音效

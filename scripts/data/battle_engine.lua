@@ -1301,6 +1301,77 @@ local function executeAction(actor, allUnits)
                 if not pt.alive then checkDeathImmune(pt) end
             end
         end
+    elseif actor.troopCat == DT.CAT_SUPPORT then
+        -- ============================================================
+        -- 辅助兵种专属行动（不参与攻击）
+        -- ============================================================
+        action.type = "support"
+        local troopData = actor.troopKey and DT.Get(actor.troopKey)
+        local sp = troopData and troopData.specials or {}
+
+        -- 治疗: supply / medic (heal_pct)
+        if sp.heal_pct then
+            local allies = getAliveUnits(allUnits, actor.side)
+            for _, a in ipairs(allies) do
+                local healAmt = math.floor(a.maxHp * sp.heal_pct)
+                local actual = applyHeal(actor, a, healAmt)
+                if actual > 0 then
+                    action.targets[#action.targets + 1] = a.name
+                    action.damages[#action.damages + 1] = 0
+                    action.heals[#action.heals + 1] = actual
+                    action.isCrit[#action.isCrit + 1] = false
+                    action.killed[#action.killed + 1] = false
+                end
+            end
+        end
+
+        -- 振奋: dancer (inspire_chance) → 随机友军增攻
+        if sp.inspire_chance then
+            local allies = getAliveUnits(allUnits, actor.side)
+            if #allies > 0 then
+                local target = allies[math.random(#allies)]
+                if math.random() < sp.inspire_chance then
+                    tryApplyStatus(target, STATUS.ATK_UP, 2, 1.0, 0)
+                    action.targets[#action.targets + 1] = target.name
+                    action.damages[#action.damages + 1] = 0
+                    action.heals[#action.heals + 1] = 0
+                    action.isCrit[#action.isCrit + 1] = false
+                    action.killed[#action.killed + 1] = false
+                    action.statuses[#action.statuses + 1] = {
+                        target = target.name,
+                        status = STATUS.ATK_UP,
+                        dur = 2,
+                    }
+                    action.extras[#action.extras + 1] = { type = "inspire", target = target.name }
+                end
+            end
+        end
+
+        -- 战鼓: war_drum (morale_boost / morale_reduce)
+        if sp.morale_boost then
+            local allies = getAliveUnits(allUnits, actor.side)
+            for _, a in ipairs(allies) do
+                if not a.troopMoraleImmune then
+                    a.morale = math.min(M.MORALE_MAX, a.morale + sp.morale_boost)
+                end
+            end
+            action.extras[#action.extras + 1] = { type = "ally_morale", boost = sp.morale_boost }
+        end
+        if sp.morale_reduce then
+            local enemySide = actor.side == "ally" and "enemy" or "ally"
+            local enemies = getAliveUnits(allUnits, enemySide)
+            for _, e in ipairs(enemies) do
+                if not e.troopMoraleImmune then
+                    e.morale = math.max(0, e.morale - sp.morale_reduce)
+                end
+            end
+            action.extras[#action.extras + 1] = { type = "enemy_morale_reduce", amount = sp.morale_reduce }
+        end
+
+        -- 辅助兵种自身回士气（较少）
+        if not actor.troopMoraleImmune then
+            actor.morale = math.min(M.MORALE_MAX, actor.morale + 10)
+        end
     else
         -- 普通攻击
         local enemySide = actor.side == "ally" and "enemy" or "ally"

@@ -406,6 +406,7 @@ local EXTRA_CONFIG = {
     debuff_zhi         = { text = "降智!",     color = { 160, 120, 255, 255 }, size = 14 },
     immune_control     = { text = "免控!",     color = { 100, 255, 200, 255 }, size = 14 },
     counter            = { text = "反击!",     color = { 255, 180, 60,  255 }, size = 16 },
+    inspire            = { text = "振奋!",     color = { 255, 200, 100, 255 }, size = 14 },
 }
 
 --- 显示 extras 特殊机制浮动提示
