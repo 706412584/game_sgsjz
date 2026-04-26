@@ -9,6 +9,7 @@ local Modal = require("ui.modal_manager")
 local DH    = require("data.data_heroes")
 local DT    = require("data.data_troops")
 local DS    = require("data.data_state")
+local DE    = require("data.data_equip")
 local C     = Theme.colors
 local S     = Theme.sizes
 
@@ -249,6 +250,61 @@ function M.Show(heroId, heroState, fullState)
                     },
                 },
             }
+
+            --------------------------------------------------------
+            -- 1.5 兵力徽章（属性之上，独立展示总数）
+            --------------------------------------------------------
+            do
+                local baseHp = db.stats.hp or 3000
+                local equipHp = 0
+                if heroState and heroState.equips then
+                    local ea = DE.CalcAllEquipAttrs(heroState.equips)
+                    equipHp = ea.hp or 0
+                end
+                local troopHp = 0
+                local hpCat = DT.GetHeroCategory(heroId)
+                if hpCat then
+                    local ta = DT.CalcTroopAttrs(hpCat, level)
+                    troopHp = ta.hp
+                end
+                local totalHp = baseHp + equipHp + troopHp
+
+                children[#children + 1] = UI.Panel {
+                    width           = "100%",
+                    flexDirection   = "row",
+                    justifyContent  = "center",
+                    alignItems      = "center",
+                    marginTop       = 8,
+                    marginBottom    = 4,
+                    children = {
+                        UI.Panel {
+                            flexDirection     = "row",
+                            alignItems        = "center",
+                            gap               = 6,
+                            backgroundColor   = { 120, 30, 30, 50 },
+                            borderColor       = C.hp,
+                            borderWidth       = 1,
+                            borderRadius      = 14,
+                            paddingHorizontal = 14,
+                            paddingVertical   = 5,
+                            children = {
+                                UI.Label {
+                                    text       = "兵力",
+                                    fontSize   = Theme.fontSize.body,
+                                    fontColor  = C.hp,
+                                    fontWeight = "bold",
+                                },
+                                UI.Label {
+                                    text       = Theme.FormatNumber(totalHp),
+                                    fontSize   = Theme.fontSize.headline,
+                                    fontColor  = C.hp,
+                                    fontWeight = "bold",
+                                },
+                            },
+                        },
+                    },
+                }
+            end
 
             --------------------------------------------------------
             -- 2. 属性（三围 + 衍生战斗属性）
