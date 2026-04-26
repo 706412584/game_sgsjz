@@ -27,16 +27,19 @@ M.BASE_CRIT_RATE  = 0.08  -- 基础暴击率
 -- 技能目标类型
 ------------------------------------------------------------
 local TARGET = {
-    SINGLE      = "single",       -- 单体
-    LINE        = "line",         -- 纵排
-    FRONT       = "front",        -- 前排
-    BACK        = "back",         -- 后排
-    ALL         = "all",          -- 全体
-    RANDOM3     = "random3",      -- 随机3目标
-    DOUBLE      = "double",       -- 双目标
-    LOWEST_HP   = "lowest_hp",    -- 最低血量
-    HIGHEST_HP  = "highest_hp",   -- 最高血量
-    ALLY_ALL    = "ally_all",     -- 全体友方(治疗)
+    SINGLE       = "single",       -- 单体
+    LINE         = "line",         -- 纵排(同列前后排)
+    ROW          = "row",          -- 横排(同行全体)
+    FRONT        = "front",        -- 前排全体
+    FRONT_SINGLE = "front_single", -- 前排单体
+    BACK         = "back",         -- 后排全体
+    BACK_SINGLE  = "back_single",  -- 后排单体
+    ALL          = "all",          -- 全体
+    RANDOM3      = "random3",      -- 随机3目标
+    DOUBLE       = "double",       -- 双目标
+    LOWEST_HP    = "lowest_hp",    -- 最低血量
+    HIGHEST_HP   = "highest_hp",   -- 最高血量
+    ALLY_ALL     = "ally_all",     -- 全体友方(治疗)
 }
 
 ------------------------------------------------------------
@@ -132,16 +135,22 @@ local function parseSkillFromDesc(heroId, heroData)
     -- 解析护盾: "护盾XXX%兵力" 或 "护盾XXX%"
     local shieldPct = desc:match("护盾(%d+)%%")
 
-    -- 解析目标类型
+    -- 解析目标类型(从最具体到最宽泛匹配)
     local targetType = TARGET.SINGLE
-    if desc:find("全体") or desc:find("群疗全体") or desc:find("全队") then
-        targetType = TARGET.ALL
+    if desc:find("前排全体") then
+        targetType = TARGET.FRONT
+    elseif desc:find("后排全体") then
+        targetType = TARGET.BACK
+    elseif desc:find("横排全体") or desc:find("横排") then
+        targetType = TARGET.ROW
+    elseif desc:find("前排单体") or desc:find("前排") then
+        targetType = TARGET.FRONT_SINGLE
+    elseif desc:find("后排单体") or desc:find("后排") then
+        targetType = TARGET.BACK_SINGLE
     elseif desc:find("纵排") then
         targetType = TARGET.LINE
-    elseif desc:find("前排") then
-        targetType = TARGET.FRONT
-    elseif desc:find("后排") then
-        targetType = TARGET.BACK
+    elseif desc:find("全体") or desc:find("群疗全体") or desc:find("全队") then
+        targetType = TARGET.ALL
     elseif desc:find("随机3") or desc:find("随机三") then
         targetType = TARGET.RANDOM3
     elseif desc:find("随机2") or desc:find("2个目标") or desc:find("双目标") then
@@ -681,6 +690,22 @@ local function selectTargets(attacker, allUnits, targetType)
     elseif targetType == TARGET.BACK then
         local back = getAliveUnits(allUnits, enemySide, "back")
         return #back > 0 and back or enemies
+    elseif targetType == TARGET.ROW then
+        -- 横排: 随机选一个敌人，命中同一行(front/back)的所有敌人
+        local primary = enemies[math.random(#enemies)]
+        local row = primary.row or "front"
+        local rowUnits = getAliveUnits(allUnits, enemySide, row)
+        return #rowUnits > 0 and rowUnits or { primary }
+    elseif targetType == TARGET.FRONT_SINGLE then
+        -- 前排单体: 随机选前排一个敌人
+        local front = getAliveUnits(allUnits, enemySide, "front")
+        if #front > 0 then return { front[math.random(#front)] } end
+        return { enemies[math.random(#enemies)] }
+    elseif targetType == TARGET.BACK_SINGLE then
+        -- 后排单体: 随机选后排一个敌人
+        local back = getAliveUnits(allUnits, enemySide, "back")
+        if #back > 0 then return { back[math.random(#back)] } end
+        return { enemies[math.random(#enemies)] }
     elseif targetType == TARGET.LINE then
         -- 纵排: 随机选一个敌人，命中同一 rowIdx 的所有前后排敌人
         local primary = enemies[math.random(#enemies)]
