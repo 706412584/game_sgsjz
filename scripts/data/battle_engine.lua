@@ -947,34 +947,43 @@ end
 -- 出手顺序(基于统+速度)
 ------------------------------------------------------------
 
---- 确定出手顺序
----@param allUnits BattleUnit[]
----@return BattleUnit[]
-local function getTurnOrder(allUnits)
-    local alive = {}
+--- 按排位固定顺序排列一方存活单位: 前1→前2→前3→中1→中2→中3→后1→后2→后3
+local ROW_ORDER = { front = 1, mid = 2, back = 3 }
+local function sortSideByPosition(allUnits, side)
+    local list = {}
     for _, u in ipairs(allUnits) do
-        if u.alive then
-            -- 眩晕/冰冻跳过
-            if not u.statuses[STATUS.STUN] and not u.statuses[STATUS.FREEZE] then
-                alive[#alive + 1] = u
-            end
+        if u.alive and u.side == side
+           and not u.statuses[STATUS.STUN]
+           and not u.statuses[STATUS.FREEZE] then
+            list[#list + 1] = u
         end
     end
-    -- 按 统+勇 降序(高属性先手), speed_up 加成
-    -- 预计算随机扰动, 避免 sort 比较函数内用 random 违反严格弱排序
-    local jitter = {}
-    for _, u in ipairs(alive) do
-        jitter[u] = math.random() * 5
-    end
-    table.sort(alive, function(a, b)
-        local sa = a.tong + a.yong * 0.3 + jitter[a]
-        local sb = b.tong + b.yong * 0.3 + jitter[b]
-        if a.statuses[STATUS.SPEED_UP] then sa = sa + BUFF_SPD_PRIO end
-        if b.statuses[STATUS.SPEED_UP] then sb = sb + BUFF_SPD_PRIO end
-        if sa ~= sb then return sa > sb end
-        return false
+    table.sort(list, function(a, b)
+        local ra = ROW_ORDER[a.row] or 9
+        local rb = ROW_ORDER[b.row] or 9
+        if ra ~= rb then return ra < rb end
+        return (a.rowIdx or 0) < (b.rowIdx or 0)
     end)
-    return alive
+    return list
+end
+
+--- 交替出手: 玩家→敌方→玩家→敌方, 各自按前中后排位顺序
+local function getTurnOrder(allUnits)
+    local allyList  = sortSideByPosition(allUnits, "ally")
+    local enemyList = sortSideByPosition(allUnits, "enemy")
+    local result = {}
+    local ai, ei = 1, 1
+    while ai <= #allyList or ei <= #enemyList do
+        if ai <= #allyList then
+            result[#result + 1] = allyList[ai]
+            ai = ai + 1
+        end
+        if ei <= #enemyList then
+            result[#result + 1] = enemyList[ei]
+            ei = ei + 1
+        end
+    end
+    return result
 end
 
 ------------------------------------------------------------
