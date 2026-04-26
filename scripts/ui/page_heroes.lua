@@ -446,7 +446,7 @@ local function buildDetailPanel(heroId, heroState)
             if heroCatHp then
                 troopHp = DT.CalcTroopAttrs(heroCatHp, level).hp
             end
-            local totalHp = baseHp + equipHp + troopHp
+            local totalHp = math.floor(baseHp + equipHp + troopHp)
             return UI.Panel {
                 flexDirection  = "row",
                 justifyContent = "space-around",

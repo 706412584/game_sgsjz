@@ -267,7 +267,7 @@ function M.Show(heroId, heroState, fullState)
                 local tHp = 0
                 local hCat = DT.GetHeroCategory(heroId)
                 if hCat then tHp = DT.CalcTroopAttrs(hCat, level).hp end
-                return base + eHp + tHp
+                return math.floor(base + eHp + tHp)
             end)()
 
             children[#children + 1] = UI.Panel {
