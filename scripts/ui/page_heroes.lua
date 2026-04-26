@@ -442,7 +442,7 @@ local function buildDetailPanel(heroId, heroState)
                 equipHp = equipAttrs.hp or 0
             end
             local troopHp = 0
-            local heroCatHp = DT.GetHeroCategory(heroId)
+            local heroCatHp = DT.GetGrowthCategory(heroId)
             if heroCatHp then
                 troopHp = DT.CalcTroopAttrs(heroCatHp, level).hp
             end
@@ -517,7 +517,7 @@ local function buildDetailPanel(heroId, heroState)
 
     -- 兵种属性加成卡片
     do
-        local troopCatForAttrs = DT.GetHeroCategory(heroId)
+        local troopCatForAttrs = DT.GetGrowthCategory(heroId)
         if troopCatForAttrs then
             local ta = DT.CalcTroopAttrs(troopCatForAttrs, level)
             local attrOrder = { "patk", "pdef", "satk", "sdef", "spd" }

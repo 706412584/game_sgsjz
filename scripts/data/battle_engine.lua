@@ -443,7 +443,13 @@ function M.CreateHeroUnit(heroId, heroState, side, row)
     -- ========== 兵种基础属性成长 ==========
     local troopAttrs = { patk = 0, pdef = 0, satk = 0, sdef = 0, hp = 0, spd = 0 }
     if troopCat then
-        troopAttrs = DT.CalcTroopAttrs(troopCat, level)
+        -- growthCategory 允许兵种使用其他分类的成长曲线（如 supply/medic 用 magic）
+        local growthCat = troopCat
+        if troopKey then
+            local td = DT.Get(troopKey)
+            if td and td.growthCategory then growthCat = td.growthCategory end
+        end
+        troopAttrs = DT.CalcTroopAttrs(growthCat, level)
     end
 
     -- 兵力 = 英雄基础hp + 装备hp加成 + 兵种hp加成
@@ -1316,10 +1322,13 @@ local function executeAction(actor, allUnits)
         local sp = troopData and troopData.specials or {}
 
         -- 治疗: supply / medic (heal_pct)
+        -- 治疗量 = 目标maxHp*heal_pct + 策攻*0.3 + 智力*0.5
         if sp.heal_pct then
             local allies = getAliveUnits(allUnits, actor.side)
+            local satkBonus = math.floor((actor.troopSatk or 0) * 0.3)
+            local zhiBonus  = math.floor((actor.zhi or 0) * 0.5)
             for _, a in ipairs(allies) do
-                local healAmt = math.floor(a.maxHp * sp.heal_pct)
+                local healAmt = math.floor(a.maxHp * sp.heal_pct) + satkBonus + zhiBonus
                 local actual = applyHeal(actor, a, healAmt)
                 if actual > 0 then
                     action.targets[#action.targets + 1] = a.name
@@ -1374,10 +1383,7 @@ local function executeAction(actor, allUnits)
             action.extras[#action.extras + 1] = { type = "enemy_morale_reduce", amount = sp.morale_reduce }
         end
 
-        -- 辅助兵种自身回士气（较少）
-        if not actor.troopMoraleImmune then
-            actor.morale = math.min(M.MORALE_MAX, actor.morale + 10)
-        end
+        -- 辅助兵种不受士气影响(morale_immune), 无需回士气
     else
         -- 普通攻击
         local enemySide = actor.side == "ally" and "enemy" or "ally"

@@ -69,7 +69,7 @@ M.CAT_PASSIVES = {
     archer   = { crit_bonus = 0.12, block_immune = true }, -- +12%暴击, 被挡不受伤
     siege    = { morale_immune = true },            -- 不受士气影响
     magic    = {},
-    support  = {},
+    support  = { morale_immune = true },
 }
 
 ------------------------------------------------------------
@@ -317,14 +317,16 @@ M.TROOPS = {
     -- 辅助系 (无攻击力, 纯辅助)
     -- ================================================================
     supply            = { name = "粮草队",     category = "support", desc = "治疗部队",
+        growthCategory = "magic",
         specials = { heal_pct = 0.10 },
-        battleDesc = "每回合为全体友军恢复10%兵力，不参与攻击" },
+        battleDesc = "每回合为全体友军恢复10%兵力(受策攻/智力加成)，不参与攻击" },
     dancer            = { name = "舞姬",       category = "support", desc = "随机振奋",
         specials = { inspire_chance = 0.65 },
         battleDesc = "每回合65%概率振奋随机友军，提升其攻击力，不参与攻击" },
     medic             = { name = "医疗队",     category = "support", desc = "高级治疗",
+        growthCategory = "magic",
         specials = { heal_pct = 0.18 },
-        battleDesc = "每回合为全体友军恢复18%兵力，不参与攻击，高级治疗" },
+        battleDesc = "每回合为全体友军恢复18%兵力(受策攻/智力加成)，不参与攻击" },
     war_drum          = { name = "战鼓队",     category = "support", desc = "+34士气-5敌方",
         bonuses = { def_pct = 0.10 },
         specials = { morale_boost = 34, morale_reduce = 5 },
@@ -406,6 +408,17 @@ function M.GetHeroCategory(heroId)
     if not key then return nil end
     local t = M.TROOPS[key]
     return t and t.category or nil
+end
+
+--- 获取英雄兵种的成长分类（可能与 category 不同，如 supply/medic 用 magic 成长）
+---@param heroId string
+---@return string|nil growthCategory
+function M.GetGrowthCategory(heroId)
+    local key = M.HERO_TROOP[heroId]
+    if not key then return nil end
+    local t = M.TROOPS[key]
+    if not t then return nil end
+    return t.growthCategory or t.category
 end
 
 --- 获取英雄兵种的中文名

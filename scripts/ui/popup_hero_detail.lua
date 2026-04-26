@@ -265,7 +265,7 @@ function M.Show(heroId, heroState, fullState)
                     eHp = ea.hp or 0
                 end
                 local tHp = 0
-                local hCat = DT.GetHeroCategory(heroId)
+                local hCat = DT.GetGrowthCategory(heroId)
                 if hCat then tHp = DT.CalcTroopAttrs(hCat, level).hp end
                 return math.floor(base + eHp + tHp)
             end)()
