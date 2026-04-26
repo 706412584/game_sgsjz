@@ -65,8 +65,20 @@ local function switchPage(pageId)
     contentContainer_:ClearChildren()
     Modal.CloseAll()
 
-    -- 非主城页面：顶部插入返回按钮行
-    if pageId ~= "city" then
+    -- 战场全屏：进入战斗隐藏顶栏，退出恢复
+    local hp = HUD.GetPanel()
+    if hp then
+        if pageId == "battle" then
+            hp:SetVisible(false)
+            YGNodeStyleSetDisplay(hp.node, YGDisplayNone)
+        else
+            hp:SetVisible(true)
+            YGNodeStyleSetDisplay(hp.node, YGDisplayFlex)
+        end
+    end
+
+    -- 非主城页面（且非战斗页面）：顶部插入返回按钮行
+    if pageId ~= "city" and pageId ~= "battle" then
         local backText = (pageId == "formation") and "返回" or "返回主城"
         local backBar = UI.Panel {
             width          = "100%",
