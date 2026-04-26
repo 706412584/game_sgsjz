@@ -99,9 +99,9 @@ local function createCard(unit, side, colKey, rowIdx)
         transition      = "value 0.3s easeOut",
     }
 
-    -- 只有战法将(步兵/骑兵/弓兵)显示气力值黄条
-    local isSkillHero = unit.troopCat == "infantry"
-                     or unit.troopCat == "cavalry"
+    -- 只有战法将(骑兵/弓兵)显示气力值黄条
+    -- 步兵(普攻将)和策士(法术)每次攻击触发兵种特性，不走士气
+    local isSkillHero = unit.troopCat == "cavalry"
                      or unit.troopCat == "archer"
     local moraleBar = nil
     if isSkillHero then
