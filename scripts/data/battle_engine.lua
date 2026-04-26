@@ -9,6 +9,7 @@ local DM = require("data.data_maps")
 local DF = require("data.data_formation")
 local TS = require("data.treasure_state")
 local DT = require("data.data_troops")
+local DE = require("data.data_equip")
 
 local M = {}
 
@@ -439,8 +440,12 @@ function M.CreateHeroUnit(heroId, heroState, side, row)
         end
     end
 
-    -- 兵力 = 英雄独立属性 hp（不再通过三围计算）
+    -- 兵力 = 英雄基础hp + 装备hp加成
     local maxHp = hd.stats.hp or 3000
+    if heroState and heroState.equips then
+        local equipAttrs = DE.CalcAllEquipAttrs(heroState.equips)
+        maxHp = maxHp + (equipAttrs.hp or 0)
+    end
 
     -- 兵种分类被动加成
     local catPassives = troopCat and DT.GetCatPassives(troopCat) or {}

@@ -10,6 +10,7 @@ local Modal  = require("ui.modal_manager")
 local DH     = require("data.data_heroes")
 local DT     = require("data.data_troops")
 local DS     = require("data.data_state")
+local DE     = require("data.data_equip")
 local HeroPopup = require("ui.popup_hero_detail")
 local C      = Theme.colors
 local S      = Theme.sizes
@@ -432,41 +433,54 @@ local function buildDetailPanel(heroId, heroState)
 
         Comp.SanDivider(),
 
-        -- 三围详情 + 兵力
-        UI.Panel {
-            gap = 4,
-            children = {
-                UI.Panel {
-                    flexDirection  = "row",
-                    justifyContent = "space-around",
-                    children = {
-                        createStatBlock("统", db.stats.tong, db.caps.tong, C.faction_wei),
-                        createStatBlock("勇", db.stats.yong, db.caps.yong, C.red),
-                        createStatBlock("智", db.stats.zhi,  db.caps.zhi,  C.mp),
-                    },
-                },
-                UI.Panel {
-                    flexDirection  = "row",
-                    justifyContent = "center",
-                    alignItems     = "center",
-                    gap            = 6,
-                    marginTop      = 2,
-                    children = {
-                        UI.Label {
-                            text      = "兵力",
-                            fontSize  = Theme.fontSize.caption,
-                            fontColor = C.textDim,
-                        },
-                        UI.Label {
-                            text       = tostring(db.stats.hp or 3000),
-                            fontSize   = Theme.fontSize.headline,
-                            fontColor  = C.hp,
-                            fontWeight = "bold",
+        -- 三围详情 + 兵力（含装备加成）
+        (function()
+            local baseHp = db.stats.hp or 3000
+            local equipHp = 0
+            if heroState and heroState.equips then
+                local equipAttrs = DE.CalcAllEquipAttrs(heroState.equips)
+                equipHp = equipAttrs.hp or 0
+            end
+            local totalHp = baseHp + equipHp
+            local hpText = tostring(totalHp)
+            if equipHp > 0 then
+                hpText = tostring(baseHp) .. "+" .. tostring(equipHp)
+            end
+            return UI.Panel {
+                gap = 4,
+                children = {
+                    UI.Panel {
+                        flexDirection  = "row",
+                        justifyContent = "space-around",
+                        children = {
+                            createStatBlock("统", db.stats.tong, db.caps.tong, C.faction_wei),
+                            createStatBlock("勇", db.stats.yong, db.caps.yong, C.red),
+                            createStatBlock("智", db.stats.zhi,  db.caps.zhi,  C.mp),
                         },
                     },
+                    UI.Panel {
+                        flexDirection  = "row",
+                        justifyContent = "center",
+                        alignItems     = "center",
+                        gap            = 6,
+                        marginTop      = 2,
+                        children = {
+                            UI.Label {
+                                text      = "兵力",
+                                fontSize  = Theme.fontSize.caption,
+                                fontColor = C.textDim,
+                            },
+                            UI.Label {
+                                text       = hpText,
+                                fontSize   = Theme.fontSize.headline,
+                                fontColor  = C.hp,
+                                fontWeight = "bold",
+                            },
+                        },
+                    },
                 },
-            },
-        },
+            }
+        end)(),
 
         Comp.SanDivider(),
 
