@@ -1129,4 +1129,61 @@ function M.GetChapterMaps(chapter)
     return list
 end
 
+----------------------------------------------------------------------------
+-- 解锁判定 API
+----------------------------------------------------------------------------
+
+--- Boss 节点的 nodeId (NODE_TEMPLATE 第24项)
+M.BOSS_NODE_ID = 24
+
+--- 检查某图是否已通关 (boss节点已击败)
+---@param mapId number
+---@param state table 玩家状态 (需含 nodeStars)
+---@return boolean
+function M.IsMapCleared(mapId, state)
+    if not state or not state.nodeStars then return false end
+    local bossKey = mapId .. "_" .. M.BOSS_NODE_ID
+    return (state.nodeStars[bossKey] or 0) > 0
+end
+
+--- 检查某图是否解锁
+--- 规则: 第1图默认解锁; 后续图需前一图boss已击败
+---@param mapId number
+---@param state table
+---@return boolean
+function M.IsMapUnlocked(mapId, state)
+    if mapId <= 1 then return true end
+    return M.IsMapCleared(mapId - 1, state)
+end
+
+--- 检查某章节是否解锁
+--- 规则: 第1章默认解锁; 后续章需前一章所有10图的boss全部击败
+---@param chapter number 1~10
+---@param state table
+---@return boolean
+function M.IsChapterUnlocked(chapter, state)
+    if chapter <= 1 then return true end
+    -- 前一章的10图 boss 都需要通关
+    local prevStart = (chapter - 2) * 10 + 1
+    local prevEnd   = (chapter - 1) * 10
+    for id = prevStart, prevEnd do
+        if not M.IsMapCleared(id, state) then
+            return false
+        end
+    end
+    return true
+end
+
+--- 获取玩家当前可进入的最高图
+---@param state table
+---@return number
+function M.GetMaxUnlockedMap(state)
+    for id = 100, 1, -1 do
+        if M.IsMapUnlocked(id, state) then
+            return id
+        end
+    end
+    return 1
+end
+
 return M

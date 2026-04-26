@@ -64,9 +64,10 @@ local function createNodeCard(mapId, nodeIdx, state)
         end
     end
 
-    -- 解锁判定
-    local locked = nodeId > (maxNode + 1)
-    if nodeId == 1 then locked = false end
+    -- 解锁判定：地图级锁定优先
+    local mapLocked = not DM.IsMapUnlocked(mapId, state)
+    local locked = mapLocked or (nodeId > (maxNode + 1))
+    if nodeId == 1 and not mapLocked then locked = false end
 
     local typeName = DM.NODE_TYPE_NAMES[nodeType] or "普通"
     local staCost  = DM.NODE_STAMINA[nodeType] or 0
@@ -264,6 +265,8 @@ local function buildMapList(chapter, state)
     for _, mapData in ipairs(maps) do
         local mapId    = mapData.id
         local isActive = (mapId == currentMap_)
+        local mapLocked = not DM.IsMapUnlocked(mapId, state)
+        local mapCleared = DM.IsMapCleared(mapId, state)
 
         -- 计算本图星数
         local mapStars = 0
@@ -276,7 +279,28 @@ local function buildMapList(chapter, state)
             end
         end
 
-        local starText = mapStars > 0 and (" ★" .. mapStars) or ""
+        local rightLabel
+        if mapLocked then
+            rightLabel = UI.Label {
+                text      = "未解锁",
+                fontSize  = Theme.fontSize.caption,
+                fontColor = C.textDim,
+            }
+        elseif mapCleared then
+            rightLabel = UI.Label {
+                text      = "★" .. mapStars,
+                fontSize  = Theme.fontSize.caption,
+                fontColor = isActive and C.bg or C.gold,
+            }
+        elseif mapStars > 0 then
+            rightLabel = UI.Label {
+                text      = "★" .. mapStars,
+                fontSize  = Theme.fontSize.caption,
+                fontColor = isActive and C.bg or C.goldDim,
+            }
+        else
+            rightLabel = UI.Panel {}
+        end
 
         children[#children + 1] = UI.Panel {
             width             = "100%",
@@ -285,28 +309,25 @@ local function buildMapList(chapter, state)
             alignItems        = "center",
             justifyContent    = "space-between",
             paddingHorizontal = 8,
-            backgroundColor   = isActive and C.jade or C.panel,
+            backgroundColor   = mapLocked and { 25, 25, 30, 255 } or (isActive and C.jade or C.panel),
             borderRadius      = 6,
-            borderColor       = isActive and C.jade or C.border,
+            borderColor       = mapLocked and { 50, 50, 55, 255 } or (isActive and C.jade or C.border),
             borderWidth       = 1,
             marginBottom      = 3,
+            opacity           = mapLocked and 0.5 or 1.0,
             transition        = "backgroundColor 0.15s easeOut",
-            onClick = function()
+            onClick = (not mapLocked) and function()
                 currentMap_ = mapId
                 M.Refresh(cachedState_)
-            end,
+            end or nil,
             children = {
                 UI.Label {
                     text      = mapId .. ". " .. mapData.name,
                     fontSize  = Theme.fontSize.bodySmall,
-                    fontColor = isActive and C.bg or C.text,
+                    fontColor = mapLocked and C.textDim or (isActive and C.bg or C.text),
                     fontWeight = isActive and "bold" or "normal",
                 },
-                UI.Label {
-                    text      = starText,
-                    fontSize  = Theme.fontSize.caption,
-                    fontColor = isActive and C.bg or C.goldDim,
-                },
+                rightLabel,
             },
         }
     end
@@ -327,28 +348,30 @@ local function buildChapterNav(state)
     for _, theme in ipairs(DM.THEMES) do
         local ch       = theme.id
         local isActive = (ch == currentChapter_)
+        local chLocked = not DM.IsChapterUnlocked(ch, state)
 
         children[#children + 1] = UI.Panel {
             width           = "100%",
             height          = 36,
             justifyContent  = "center",
             alignItems      = "center",
-            backgroundColor = isActive and C.jade or { 0, 0, 0, 0 },
+            backgroundColor = chLocked and { 25, 25, 30, 255 } or (isActive and C.jade or { 0, 0, 0, 0 }),
             borderRadius    = 6,
             marginBottom    = 2,
             paddingHorizontal = 4,
+            opacity         = chLocked and 0.45 or 1.0,
             transition      = "backgroundColor 0.15s easeOut",
-            onClick = function()
+            onClick = (not chLocked) and function()
                 currentChapter_ = ch
                 -- 自动选中该章第一图
                 currentMap_ = (ch - 1) * 10 + 1
                 M.Refresh(cachedState_)
-            end,
+            end or nil,
             children = {
                 UI.Label {
                     text      = theme.name,
                     fontSize  = Theme.fontSize.caption,
-                    fontColor = isActive and C.bg or C.text,
+                    fontColor = chLocked and C.textDim or (isActive and C.bg or C.text),
                     fontWeight = isActive and "bold" or "normal",
                     textAlign = "center",
                 },

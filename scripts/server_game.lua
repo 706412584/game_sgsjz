@@ -12,6 +12,7 @@ local Shop    = require("data.data_shop")
 local DE      = require("data.data_equip")
 local DF      = require("data.data_formation")
 local TS      = require("data.treasure_state")
+local DM      = require("data.data_maps")
 local Shared  = require("network.shared")
 local EVENTS  = Shared.EVENTS
 
@@ -359,6 +360,12 @@ ACTION_HANDLERS["battle"] = function(userId, params)
     local nodeId   = params.nodeId or 1
     local nodeType = params.nodeType or "normal"
 
+    -- 地图解锁验证
+    if not DM.IsMapUnlocked(mapId, state) then
+        sendEvt(userId, "error", { msg = "该关卡尚未解锁，请先通关前一关" })
+        return
+    end
+
     -- 体力检查
     State.UpdateStamina(state)
     local staminaCost = 6
@@ -394,6 +401,13 @@ ACTION_HANDLERS["battle"] = function(userId, params)
                 count = td.count,
                 type  = "treasure_material",
             }
+        end
+
+        -- 通关标记: boss击败后记录地图通关
+        if nodeType == "boss" then
+            state.clearedMaps = state.clearedMaps or {}
+            state.clearedMaps[tostring(mapId)] = true
+            print("[服务端] 地图 " .. mapId .. " 已通关!")
         end
     end
 
@@ -458,6 +472,11 @@ ACTION_HANDLERS["event_node"] = function(userId, params)
     local mapId  = params.mapId or 1
     local nodeId = params.nodeId or 1
 
+    if not DM.IsMapUnlocked(mapId, state) then
+        sendEvt(userId, "error", { msg = "该关卡尚未解锁" })
+        return
+    end
+
     local key = mapId .. "_" .. nodeId
     if state.nodeStars[key] and state.nodeStars[key] >= 3 then
         sendEvt(userId, "error", { msg = "该事件已完成" })
@@ -484,6 +503,11 @@ ACTION_HANDLERS["chest_node"] = function(userId, params)
     local state = players_[userId]
     local mapId  = params.mapId or 1
     local nodeId = params.nodeId or 1
+
+    if not DM.IsMapUnlocked(mapId, state) then
+        sendEvt(userId, "error", { msg = "该关卡尚未解锁" })
+        return
+    end
 
     local key = mapId .. "_" .. nodeId
     if state.nodeStars[key] and state.nodeStars[key] >= 3 then
