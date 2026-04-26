@@ -139,6 +139,22 @@ function M.PlayActionSound(action, unitById)
 end
 
 ------------------------------------------------------------
+-- 根据 action.extras 播放辅助效果音效
+-- （增怒、减怒等由兵种被动产生的效果）
+------------------------------------------------------------
+---@param extras table[] action.extras 数组
+function M.PlayExtrasSound(extras)
+    if not extras then return end
+    for _, ex in ipairs(extras) do
+        if ex.type == "ally_morale" then
+            playSfx("war_drum", 0.55)
+        elseif ex.type == "enemy_morale_reduce" then
+            playSfx("war_drum", 0.45)
+        end
+    end
+end
+
+------------------------------------------------------------
 -- 清理
 ------------------------------------------------------------
 function M.Clear()

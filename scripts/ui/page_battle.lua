@@ -198,6 +198,9 @@ local function showActionEffects(action)
         end
     end
 
+    -- extras 音效（增怒/减怒等辅助效果）
+    BAudio.PlayExtrasSound(action.extras)
+
     -- extras 特殊机制视觉反馈 (闪避/斩杀/免死/吸血/追击/增怒/减怒/降智/免控)
     if action.extras then
         local troopShownFor = {}  -- 每个单位只显示一次兵种名

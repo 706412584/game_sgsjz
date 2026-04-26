@@ -418,6 +418,7 @@ ACTION_HANDLERS["battle"] = function(userId, params)
                 level    = u.level,
                 alive    = u.alive,
                 troopCat = u.troopCat,
+                troopKey = u.troopKey,
             }
         end
         return out
