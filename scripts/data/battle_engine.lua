@@ -976,8 +976,10 @@ local function executeAction(actor, allUnits)
             end
         end
 
-        -- 被攻击增怒(机械系免疫)
-        if t.alive and not t.troopMoraleImmune then
+        -- 被攻击增怒(机械系免疫; 被策士攻击不涨)
+        local attackerIsMagic = actor.troopCat == DT.CAT_MAGIC
+                             or actor.troopCat == DT.CAT_SUPPORT
+        if t.alive and not t.troopMoraleImmune and not attackerIsMagic then
             t.morale = math.min(M.MORALE_MAX, t.morale + M.MORALE_BE_HIT)
         end
         -- 击杀增怒(机械系免疫)
