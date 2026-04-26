@@ -114,6 +114,10 @@ local function showActionEffects(action)
 
     local targetMorales = action.targetMorales or {}
 
+    -- 跟踪暴击: 汇总后在攻击方位置显示横幅
+    local hasCrit = false
+    local critTotalDmg = 0
+
     for i = 1, #targets do
         local tName = targets[i]
         local tUnit = unitByName_[tName]
@@ -131,6 +135,11 @@ local function showActionEffects(action)
                     BFX.ShowDamage(pos.x + ox, pos.y + oy, dmg, isCrit[i])
                 end
                 if st then st.hp = math.max(0, st.hp - dmg) end
+                -- 汇总暴击伤害
+                if isCrit[i] then
+                    hasCrit = true
+                    critTotalDmg = critTotalDmg + dmg
+                end
             end
 
             -- 治疗
@@ -156,6 +165,15 @@ local function showActionEffects(action)
                 BField.UpdateUnit(tId, st.hp, st.maxHp,
                     st.morale, st.statuses, st.alive)
             end
+        end
+    end
+
+    -- 暴击横幅: 显示在攻击方血条位置; 技能后延迟0.5s再显示
+    if hasCrit and actorId then
+        local aPos = BField.GetUnitPos(actorId)
+        if aPos then
+            local critDelay = (action.type == "skill") and 0.5 or 0
+            BFX.ShowCritBanner(aPos.x, aPos.y, critTotalDmg, critDelay)
         end
     end
 

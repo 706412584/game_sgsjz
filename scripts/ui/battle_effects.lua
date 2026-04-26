@@ -163,19 +163,31 @@ function M.Init(parent)
     effects_ = {}
 end
 
---- 显示伤害数字 (增强版: 多段散射 + 暴击红墨横幅)
----@param x number 屏幕X
----@param y number 屏幕Y
+--- 显示伤害数字 (增强版: 多段散射)
+--- 暴击横幅已拆分到 ShowCritBanner，此处暴击仅显示加大伤害数字+散射
+---@param x number 屏幕X (目标位置)
+---@param y number 屏幕Y (目标位置)
 ---@param value number 伤害值
 ---@param isCrit boolean 是否暴击
 function M.ShowDamage(x, y, value, isCrit)
     local dmgText = tostring(math.floor(value))
 
     if isCrit then
-        -- 暴击: 红色水墨横幅 + 黑色暴击文字
-        spawnInkBanner(x, y - 35, "暴击 " .. dmgText,
-            "Textures/ui/ink_brush_red.png",
-            { 30, 10, 10, 255 }, 1.4)
+        -- 暴击: 在目标位置显示加大红色伤害数字
+        spawnLabel(x, y, "-" .. dmgText, 22,
+            { 255, 60, 40, 255 }, 1.1,
+            {
+                keyframes = {
+                    [0]    = { scale = 0.5, translateY = 0, opacity = 0 },
+                    [0.1]  = { scale = 1.6, translateY = -5, opacity = 1 },
+                    [0.25] = { scale = 1.2, translateY = -10, opacity = 1 },
+                    [0.6]  = { scale = 1.1, translateY = -25, opacity = 0.7 },
+                    [1]    = { scale = 1.0, translateY = -45, opacity = 0 },
+                },
+                duration = 1.1,
+                easing   = "easeOut",
+                fillMode = "forwards",
+            })
 
         -- 附加散射碎片数字 (3~4段小数字飞散)
         local fragments = math.random(3, 4)
@@ -291,6 +303,63 @@ function M.ShowKill(x, y, name)
         easing   = "easeOutBack",
         fillMode = "forwards",
     })
+end
+
+--- 显示暴击横幅 — 红色水墨横幅 + 暴击文字 (在攻击方位置)
+---@param x number 攻击方屏幕X
+---@param y number 攻击方屏幕Y
+---@param value number 暴击伤害总值
+---@param animDelay number|nil 延迟显示(秒), 用于技能后再显示暴击
+function M.ShowCritBanner(x, y, value, animDelay)
+    if not container_ then return end
+    local dmgText = tostring(math.floor(value))
+    local bannerW = 200
+    local bannerH = 50
+    local bx = math.floor(x - bannerW / 2)
+    local by = math.floor(y - bannerH / 2 - 35)
+    local totalTtl = 1.4
+
+    local banner = UI.Panel {
+        position        = "absolute",
+        left            = bx,
+        top             = by,
+        width           = bannerW,
+        height          = bannerH,
+        backgroundImage = "Textures/ui/ink_brush_red.png",
+        backgroundFit   = "fill",
+        justifyContent  = "center",
+        alignItems      = "center",
+        pointerEvents   = "none",
+    }
+
+    local label = UI.Label {
+        text       = "暴击 " .. dmgText,
+        fontSize   = 18,
+        fontColor  = { 30, 10, 10, 255 },
+        fontWeight = "bold",
+        textAlign  = "center",
+        pointerEvents = "none",
+    }
+    banner:AddChild(label)
+    container_:AddChild(banner)
+
+    local delay = animDelay or 0
+
+    banner:Animate({
+        keyframes = {
+            [0]    = { scaleX = 0.3, scaleY = 0.6, opacity = 0, translateY = 0 },
+            [0.15] = { scaleX = 1.15, scaleY = 1.0, opacity = 1, translateY = 0 },
+            [0.25] = { scaleX = 1.0, scaleY = 1.0, opacity = 1, translateY = 0 },
+            [0.7]  = { scaleX = 1.0, scaleY = 1.0, opacity = 1, translateY = -5 },
+            [1]    = { scaleX = 1.0, scaleY = 1.0, opacity = 0, translateY = -20 },
+        },
+        duration = totalTtl,
+        easing   = "easeOut",
+        fillMode = "forwards",
+        delay    = delay,
+    })
+
+    registerFx(banner, totalTtl + delay)
 end
 
 --- 显示技能名 — 黑色水墨横幅 + 金色技能名文字
