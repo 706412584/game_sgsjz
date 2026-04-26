@@ -67,9 +67,7 @@ function M.Init()
     if not audioScene_ then
         audioScene_ = Scene()
     end
-    if not soundNode_ or soundNode_:IsNull() then
-        soundNode_ = audioScene_:CreateChild("BattleSFX")
-    end
+    soundNode_ = audioScene_:CreateChild("BattleSFX")
 end
 
 ------------------------------------------------------------
@@ -144,9 +142,6 @@ end
 -- 清理
 ------------------------------------------------------------
 function M.Clear()
-    if soundNode_ and not soundNode_:IsNull() then
-        soundNode_:Remove()
-    end
     soundNode_ = nil
     audioScene_ = nil
 end
