@@ -146,6 +146,58 @@ function M.ShowStatus(x, y, statusName)
     })
 end
 
+------------------------------------------------------------
+-- extras 特殊机制视觉提示
+------------------------------------------------------------
+local EXTRA_CONFIG = {
+    dodge              = { text = "闪避!",     color = { 120, 220, 255, 255 }, size = 14 },
+    execute            = { text = "斩杀!",     color = { 255, 60,  60,  255 }, size = 18 },
+    death_immune       = { text = "免死!",     color = { 255, 220, 80,  255 }, size = 18 },
+    lifesteal          = { text = "吸血",      color = { 180, 255, 120, 255 }, size = 14 },
+    kill_morale        = { text = "杀敌回怒!", color = { 255, 200, 60,  255 }, size = 13 },
+    pursuit            = { text = "追击!",     color = { 255, 140, 40,  255 }, size = 16 },
+    ally_morale        = { text = "全军增怒!", color = { 255, 220, 80,  255 }, size = 14 },
+    enemy_morale_reduce= { text = "敌军减怒!", color = { 160, 120, 255, 255 }, size = 14 },
+    debuff_zhi         = { text = "降智!",     color = { 160, 120, 255, 255 }, size = 14 },
+    immune_control     = { text = "免控!",     color = { 100, 255, 200, 255 }, size = 14 },
+    counter            = { text = "反击!",     color = { 255, 180, 60,  255 }, size = 16 },
+}
+
+--- 显示 extras 特殊机制浮动提示
+---@param x number 屏幕X
+---@param y number 屏幕Y
+---@param extraType string extras 类型
+---@param extraData table|nil 额外数据
+function M.ShowExtra(x, y, extraType, extraData)
+    local cfg = EXTRA_CONFIG[extraType]
+    if not cfg then return end
+
+    local text = cfg.text
+    -- 吸血显示数值
+    if extraType == "lifesteal" and extraData and extraData.heal then
+        text = "吸血+" .. math.floor(extraData.heal)
+    end
+    -- 追击显示伤害
+    if extraType == "pursuit" and extraData and extraData.damage then
+        text = "追击!" .. math.floor(extraData.damage)
+    end
+
+    -- 偏移避免和伤害数字重叠
+    local ox = math.random(-10, 10)
+    local oy = -35 + math.random(-5, 5)
+
+    spawnLabel(x + ox, y + oy, text, cfg.size, cfg.color, 1.0, {
+        keyframes = {
+            { scale = 0.6, translateY = 0, opacity = 0 },
+            { scale = 1.1, translateY = -5, opacity = 1 },
+            { scale = 1.0, translateY = -25, opacity = 0 },
+        },
+        duration = 1.0,
+        easing   = "easeOut",
+        fillMode = "forwards",
+    })
+end
+
 --- 每帧更新: 管理特效生命周期
 function M.Update(dt)
     local i = 1

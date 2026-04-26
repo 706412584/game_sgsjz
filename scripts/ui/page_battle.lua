@@ -104,6 +104,12 @@ local function showActionEffects(action)
         if aPos then BFX.ShowSkillName(aPos.x, aPos.y - 10, action.name) end
     end
 
+    -- 反击提示
+    if action.type == "counter" and actorId then
+        local aPos = BField.GetUnitPos(actorId)
+        if aPos then BFX.ShowExtra(aPos.x, aPos.y, "counter", nil) end
+    end
+
     local targetMorales = action.targetMorales or {}
 
     for i = 1, #targets do
@@ -167,6 +173,33 @@ local function showActionEffects(action)
                 end
             end
         end
+    end
+
+    -- extras 特殊机制视觉反馈 (闪避/斩杀/免死/吸血/追击/增怒/减怒/降智/免控)
+    if action.extras then
+        for _, ex in ipairs(action.extras) do
+            local exType = ex.type
+            -- 确定显示位置：有 target 的显示在目标上，否则显示在攻击者上
+            local showUnit = nil
+            if ex.target then
+                showUnit = unitByName_[ex.target]
+            end
+            if not showUnit then
+                -- 无目标的机制（吸血/免控/增怒/减怒/降智）显示在攻击者上
+                showUnit = actorId and unitById_[actorId] or nil
+            end
+            if showUnit then
+                local pos = BField.GetUnitPos(showUnit.id)
+                if pos then
+                    BFX.ShowExtra(pos.x, pos.y, exType, ex)
+                end
+            end
+        end
+    end
+
+    -- 战法释放: 给攻击者卡牌金色闪烁
+    if action.type == "skill" and actorId then
+        BField.FlashSkillGlow(actorId)
     end
 
     updateTopBarHp()

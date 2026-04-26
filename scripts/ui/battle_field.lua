@@ -441,6 +441,26 @@ function M.HighlightUnit(unitId)
     lastHighlight_ = unitId
 end
 
+--- 战法释放时: 卡牌金色闪烁光晕
+function M.FlashSkillGlow(unitId)
+    local info = unitCards_[unitId]
+    if not info or not info.panel then return end
+
+    -- 用整张卡片做金色闪烁 (borderColor + scale脉冲)
+    info.panel:Animate({
+        keyframes = {
+            [0]    = { scale = 1.0, opacity = 1.0 },
+            [0.15] = { scale = 1.20, opacity = 0.85 },
+            [0.35] = { scale = 1.10, opacity = 1.0 },
+            [0.55] = { scale = 1.15, opacity = 0.90 },
+            [0.75] = { scale = 1.05, opacity = 1.0 },
+            [1]    = { scale = 1.0, opacity = 1.0 },
+        },
+        duration = 0.6,
+        easing   = "easeOut",
+    })
+end
+
 --- 获取单位卡牌中心位置 (估算, 供特效定位)
 function M.GetUnitPos(unitId)
     local info = unitCards_[unitId]
