@@ -27,11 +27,13 @@ M.BASE_CRIT_RATE  = 0.08  -- 基础暴击率
 -- 技能目标类型
 ------------------------------------------------------------
 local TARGET = {
-    SINGLE       = "single",       -- 单体
-    LINE         = "line",         -- 纵排(同列前后排)
-    ROW          = "row",          -- 横排(同行全体)
+    SINGLE       = "single",       -- 单体(列深度搜索)
+    LINE         = "line",         -- 纵排(同列全深度)
+    ROW          = "row",          -- 横排(同深度全体)
     FRONT        = "front",        -- 前排全体
     FRONT_SINGLE = "front_single", -- 前排单体
+    MID          = "mid",          -- 中排全体
+    MID_SINGLE   = "mid_single",   -- 中排单体
     BACK         = "back",         -- 后排全体
     BACK_SINGLE  = "back_single",  -- 后排单体
     ALL          = "all",          -- 全体
@@ -86,25 +88,59 @@ local function assignRowIndices(count)
     return { 1, 2, 3 }
 end
 
---- 为一组单元分配 rowIdx (按 front/back 分组各自分配)
+--- 为一组单元分配 rowIdx (按 front/mid/back 三组各自分配)
 ---@param units BattleUnit[]
 local function assignRowIdx(units)
-    local front, back = {}, {}
+    local front, mid, back = {}, {}, {}
     for _, u in ipairs(units) do
         if u.row == "front" then
             front[#front + 1] = u
+        elseif u.row == "mid" then
+            mid[#mid + 1] = u
         else
             back[#back + 1] = u
         end
     end
     local fIdx = assignRowIndices(#front)
-    for i, u in ipairs(front) do
-        u.rowIdx = fIdx[i]
-    end
+    for i, u in ipairs(front) do u.rowIdx = fIdx[i] end
+    local mIdx = assignRowIndices(#mid)
+    for i, u in ipairs(mid) do u.rowIdx = mIdx[i] end
     local bIdx = assignRowIndices(#back)
-    for i, u in ipairs(back) do
-        u.rowIdx = bIdx[i]
+    for i, u in ipairs(back) do u.rowIdx = bIdx[i] end
+end
+
+--- 列深度搜索: 从指定深度序列中找同列(rowIdx)存活敌人
+--- depthOrder 例如 {"front","mid","back"} 表示先搜前排再中再后
+---@param allUnits BattleUnit[]
+---@param enemySide string
+---@param attackerRowIdx number
+---@param depthOrder string[]
+---@return BattleUnit|nil
+local function columnDepthSearch(allUnits, enemySide, attackerRowIdx, depthOrder)
+    -- 1) 按深度序列搜索同列
+    for _, row in ipairs(depthOrder) do
+        local rowUnits = getAliveUnits(allUnits, enemySide, row)
+        for _, u in ipairs(rowUnits) do
+            if u.rowIdx == attackerRowIdx then return u end
+        end
     end
+    -- 2) 同列为空 → 搜索相邻列 (2→1→3, 1→2→3, 3→2→1)
+    local adjOrder
+    if attackerRowIdx == 2 then adjOrder = {1, 3}
+    elseif attackerRowIdx == 1 then adjOrder = {2, 3}
+    else adjOrder = {2, 1} end
+    for _, adjIdx in ipairs(adjOrder) do
+        for _, row in ipairs(depthOrder) do
+            local rowUnits = getAliveUnits(allUnits, enemySide, row)
+            for _, u in ipairs(rowUnits) do
+                if u.rowIdx == adjIdx then return u end
+            end
+        end
+    end
+    -- 3) fallback: 随机存活敌人
+    local all = getAliveUnits(allUnits, enemySide)
+    if #all > 0 then return all[math.random(#all)] end
+    return nil
 end
 
 ------------------------------------------------------------
@@ -697,17 +733,26 @@ local function selectTargets(attacker, allUnits, targetType)
         local rowUnits = getAliveUnits(allUnits, enemySide, row)
         return #rowUnits > 0 and rowUnits or { primary }
     elseif targetType == TARGET.FRONT_SINGLE then
-        -- 前排单体: 随机选前排一个敌人
-        local front = getAliveUnits(allUnits, enemySide, "front")
-        if #front > 0 then return { front[math.random(#front)] } end
-        return { enemies[math.random(#enemies)] }
+        -- 前排单体: 列深度搜索 front → mid → back
+        local rIdx = attacker.rowIdx or 2
+        local t = columnDepthSearch(allUnits, enemySide, rIdx, {"front", "mid", "back"})
+        return t and { t } or { enemies[math.random(#enemies)] }
+    elseif targetType == TARGET.MID then
+        -- 中排全体
+        local mid = getAliveUnits(allUnits, enemySide, "mid")
+        return #mid > 0 and mid or enemies
+    elseif targetType == TARGET.MID_SINGLE then
+        -- 中排单体: 列深度搜索 mid → front → back
+        local rIdx = attacker.rowIdx or 2
+        local t = columnDepthSearch(allUnits, enemySide, rIdx, {"mid", "front", "back"})
+        return t and { t } or { enemies[math.random(#enemies)] }
     elseif targetType == TARGET.BACK_SINGLE then
-        -- 后排单体: 随机选后排一个敌人
-        local back = getAliveUnits(allUnits, enemySide, "back")
-        if #back > 0 then return { back[math.random(#back)] } end
-        return { enemies[math.random(#enemies)] }
+        -- 后排单体: 列深度搜索 back → mid → front
+        local rIdx = attacker.rowIdx or 2
+        local t = columnDepthSearch(allUnits, enemySide, rIdx, {"back", "mid", "front"})
+        return t and { t } or { enemies[math.random(#enemies)] }
     elseif targetType == TARGET.LINE then
-        -- 纵排: 随机选一个敌人，命中同一 rowIdx 的所有前后排敌人
+        -- 纵排: 随机选一个敌人，命中同一 rowIdx 的所有深度层(front+mid+back)敌人
         local primary = enemies[math.random(#enemies)]
         local targetRowIdx = primary.rowIdx or 2
         local targets = {}
@@ -755,10 +800,10 @@ local function selectTargets(attacker, allUnits, targetType)
         end
         return { highest }
     else
-        -- SINGLE: 优先前排
-        local front = getAliveUnits(allUnits, enemySide, "front")
-        if #front > 0 then return { front[math.random(#front)] } end
-        return { enemies[math.random(#enemies)] }
+        -- SINGLE: 列深度搜索 front → mid → back
+        local rIdx = attacker.rowIdx or 2
+        local t = columnDepthSearch(allUnits, enemySide, rIdx, {"front", "mid", "back"})
+        return t and { t } or { enemies[math.random(#enemies)] }
     end
 end
 
@@ -1228,14 +1273,10 @@ local function executeAction(actor, allUnits)
             local allies = getAliveUnits(allUnits, actor.side)
             targets = #allies > 0 and { allies[math.random(#allies)] } or {}
         else
-            -- 优先前排
-            local front = getAliveUnits(allUnits, enemySide, "front")
-            if #front > 0 then
-                targets = { front[math.random(#front)] }
-            else
-                local all = getAliveUnits(allUnits, enemySide)
-                targets = #all > 0 and { all[math.random(#all)] } or {}
-            end
+            -- 列深度搜索: front → mid → back
+            local rIdx = actor.rowIdx or 2
+            local t = columnDepthSearch(allUnits, enemySide, rIdx, {"front", "mid", "back"})
+            targets = t and { t } or {}
         end
 
         for _, t in ipairs(targets) do
@@ -1309,6 +1350,12 @@ function M.BuildAllyTeam(gameState)
         units[#units + 1] = M.CreateHeroUnit(hid, heroState, "ally", "front")
     end
 
+    -- 中排
+    for _, hid in ipairs(lineup.mid or {}) do
+        local heroState = gameState.heroes[hid]
+        units[#units + 1] = M.CreateHeroUnit(hid, heroState, "ally", "mid")
+    end
+
     -- 后排
     for _, hid in ipairs(lineup.back or {}) do
         local heroState = gameState.heroes[hid]
@@ -1336,6 +1383,14 @@ function M.BuildAllyTeam(gameState)
         -- 前排专属防御
         if buffs.front_def_pct and u.row == "front" then
             u.tong = math.floor(u.tong * (1 + buffs.front_def_pct))
+        end
+        -- 中排专属攻击
+        if buffs.mid_atk_pct and u.row == "mid" then
+            u.yong = math.floor(u.yong * (1 + buffs.mid_atk_pct))
+        end
+        -- 中排专属防御
+        if buffs.mid_def_pct and u.row == "mid" then
+            u.tong = math.floor(u.tong * (1 + buffs.mid_def_pct))
         end
         -- 后排专属攻击
         if buffs.back_atk_pct and u.row == "back" then
@@ -1382,35 +1437,51 @@ function M.BuildEnemyTeam(mapId, nodeIdx, nodeType)
     local basePower = DM.GetNodePower(mapId, nodeIdx) or mapData.power
 
     -- 敌方阵容: 从地图数据中取小兵名
-    local soldiers = mapData.soldiers or { "敌兵甲", "敌兵乙", "敌兵丙", "敌兵丁", "敌兵戊" }
+    local soldiers = mapData.soldiers or { "敌兵甲", "敌兵乙", "敌兵丙", "敌兵丁", "敌兵戊", "敌兵己", "敌兵庚", "敌兵辛", "敌兵壬" }
     local elites   = mapData.elites or {}
     local boss     = mapData.boss or "守将"
+
+    -- 辅助: 安全取小兵名
+    local function sol(i) return soldiers[((i - 1) % #soldiers) + 1] or ("敌兵" .. i) end
 
     local units = {}
 
     if nodeType == "boss" then
-        -- Boss节点: Boss + 2肉盾前排 + 2后排
-        units[#units + 1] = M.CreateSoldierUnit(boss, mapId, "enemy", "front", basePower * 1.5)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[1] or "前排兵", mapId, "enemy", "front", basePower * 0.9)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[2] or "后排兵", mapId, "enemy", "back", basePower * 0.7)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[3] or "后排兵", mapId, "enemy", "back", basePower * 0.7)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[4] or "后排兵", mapId, "enemy", "back", basePower * 0.6)
+        -- Boss节点: 3前(Boss+2肉盾) + 3中 + 3后
+        units[#units + 1] = M.CreateSoldierUnit(boss,   mapId, "enemy", "front", basePower * 1.5)
+        units[#units + 1] = M.CreateSoldierUnit(sol(1), mapId, "enemy", "front", basePower * 0.9)
+        units[#units + 1] = M.CreateSoldierUnit(sol(2), mapId, "enemy", "front", basePower * 0.85)
+        units[#units + 1] = M.CreateSoldierUnit(sol(3), mapId, "enemy", "mid",   basePower * 0.8)
+        units[#units + 1] = M.CreateSoldierUnit(sol(4), mapId, "enemy", "mid",   basePower * 0.75)
+        units[#units + 1] = M.CreateSoldierUnit(sol(5), mapId, "enemy", "mid",   basePower * 0.7)
+        units[#units + 1] = M.CreateSoldierUnit(sol(6), mapId, "enemy", "back",  basePower * 0.65)
+        units[#units + 1] = M.CreateSoldierUnit(sol(7), mapId, "enemy", "back",  basePower * 0.6)
+        units[#units + 1] = M.CreateSoldierUnit(sol(8), mapId, "enemy", "back",  basePower * 0.55)
     elseif nodeType == "elite" then
-        -- 精英: 精英守将 + 4小兵
+        -- 精英: 精英守将 + 8小兵
         local eliteName = #elites > 0 and elites[((nodeIdx - 1) % #elites) + 1] or "精英守将"
         units[#units + 1] = M.CreateSoldierUnit(eliteName, mapId, "enemy", "front", basePower * 1.2)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[1] or "前排兵", mapId, "enemy", "front", basePower * 0.85)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[2] or "后排兵", mapId, "enemy", "back", basePower * 0.7)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[3] or "后排兵", mapId, "enemy", "back", basePower * 0.65)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[4] or "后排兵", mapId, "enemy", "back", basePower * 0.6)
+        units[#units + 1] = M.CreateSoldierUnit(sol(1), mapId, "enemy", "front", basePower * 0.85)
+        units[#units + 1] = M.CreateSoldierUnit(sol(2), mapId, "enemy", "front", basePower * 0.8)
+        units[#units + 1] = M.CreateSoldierUnit(sol(3), mapId, "enemy", "mid",   basePower * 0.75)
+        units[#units + 1] = M.CreateSoldierUnit(sol(4), mapId, "enemy", "mid",   basePower * 0.7)
+        units[#units + 1] = M.CreateSoldierUnit(sol(5), mapId, "enemy", "mid",   basePower * 0.65)
+        units[#units + 1] = M.CreateSoldierUnit(sol(6), mapId, "enemy", "back",  basePower * 0.6)
+        units[#units + 1] = M.CreateSoldierUnit(sol(7), mapId, "enemy", "back",  basePower * 0.55)
+        units[#units + 1] = M.CreateSoldierUnit(sol(8), mapId, "enemy", "back",  basePower * 0.5)
     else
-        -- 普通: 从小兵池轮换
-        local guardIdx = ((nodeIdx - 1) % #soldiers) + 1
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[guardIdx], mapId, "enemy", "front", basePower * 1.0)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[(guardIdx % #soldiers) + 1], mapId, "enemy", "front", basePower * 0.8)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[((guardIdx + 1) % #soldiers) + 1], mapId, "enemy", "back", basePower * 0.65)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[((guardIdx + 2) % #soldiers) + 1], mapId, "enemy", "back", basePower * 0.55)
-        units[#units + 1] = M.CreateSoldierUnit(soldiers[((guardIdx + 3) % #soldiers) + 1], mapId, "enemy", "back", basePower * 0.5)
+        -- 普通: 从小兵池轮换, 3+3+3
+        local g = ((nodeIdx - 1) % #soldiers) + 1
+        local function solR(offset) return soldiers[((g + offset - 1) % #soldiers) + 1] or ("敌兵" .. offset) end
+        units[#units + 1] = M.CreateSoldierUnit(solR(0), mapId, "enemy", "front", basePower * 1.0)
+        units[#units + 1] = M.CreateSoldierUnit(solR(1), mapId, "enemy", "front", basePower * 0.85)
+        units[#units + 1] = M.CreateSoldierUnit(solR(2), mapId, "enemy", "front", basePower * 0.75)
+        units[#units + 1] = M.CreateSoldierUnit(solR(3), mapId, "enemy", "mid",   basePower * 0.7)
+        units[#units + 1] = M.CreateSoldierUnit(solR(4), mapId, "enemy", "mid",   basePower * 0.65)
+        units[#units + 1] = M.CreateSoldierUnit(solR(5), mapId, "enemy", "mid",   basePower * 0.6)
+        units[#units + 1] = M.CreateSoldierUnit(solR(6), mapId, "enemy", "back",  basePower * 0.55)
+        units[#units + 1] = M.CreateSoldierUnit(solR(7), mapId, "enemy", "back",  basePower * 0.5)
+        units[#units + 1] = M.CreateSoldierUnit(solR(8), mapId, "enemy", "back",  basePower * 0.45)
     end
 
     assignRowIdx(units)
@@ -1423,12 +1494,12 @@ end
 ---@return BattleUnit[]
 function M.BuildDefaultEnemyTeam(mapId, nodeType)
     local power = 1000 + mapId * 100
-    local names = { "敌兵甲", "敌兵乙", "敌兵丙", "敌兵丁", "敌兵戊" }
+    local names = { "敌兵甲", "敌兵乙", "敌兵丙", "敌兵丁", "敌兵戊", "敌兵己", "敌兵庚", "敌兵辛", "敌兵壬" }
+    local rowMap = { "front", "front", "front", "mid", "mid", "mid", "back", "back", "back" }
+    local pctMap = { 1.0, 0.85, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45 }
     local units = {}
-    for i = 1, 5 do
-        local row = i <= 2 and "front" or "back"
-        local p = power * (i == 1 and 1.0 or (0.9 - i * 0.05))
-        units[#units + 1] = M.CreateSoldierUnit(names[i], mapId, "enemy", row, p)
+    for i = 1, 9 do
+        units[#units + 1] = M.CreateSoldierUnit(names[i], mapId, "enemy", rowMap[i], power * pctMap[i])
     end
     assignRowIdx(units)
     return units

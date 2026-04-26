@@ -76,11 +76,12 @@ function M.CreateDefaultState()
             xiaohoudun   = { level = 7,  star = 1, exp = 0, fragments = 0 },
         },
 
-        -- 阵容
+        -- 阵容 (3×3: 前排3 + 中排3 + 后排3)
         lineup = {
             formation = "feng_shi",
-            front = { "lvbu", "zhangfei" },
-            back  = { "zhugeliang", "guanyu", "zhaoyun" },
+            front = { "lvbu", "zhangfei", "xiaohoudun" },
+            mid   = { "guanyu", "zhaoyun", "huangzhong" },
+            back  = { "zhugeliang", "diaochan", "caiwenji" },
         },
 
         -- 背包
@@ -764,6 +765,7 @@ function M.RecalcPower(state)
     -- 仅计算阵容中英雄的战力
     local inLineup = {}
     for _, id in ipairs(state.lineup.front) do inLineup[id] = true end
+    for _, id in ipairs(state.lineup.mid or {})  do inLineup[id] = true end
     for _, id in ipairs(state.lineup.back)  do inLineup[id] = true end
 
     for heroId, heroState in pairs(state.heroes) do
@@ -812,7 +814,8 @@ local function patchState(s)
     s.clearedMaps = s.clearedMaps or {}
     s.jianghun = s.jianghun or 0
     s.zhaomuling = s.zhaomuling or 0
-    s.lineup = s.lineup or { formation = "feng_shi", front = {}, back = {} }
+    s.lineup = s.lineup or { formation = "feng_shi", front = {}, mid = {}, back = {} }
+    s.lineup.mid = s.lineup.mid or {}  -- 旧存档兼容: 补充中排
     s.inventory.reforge_stone = s.inventory.reforge_stone or 0
     s.equipBag = s.equipBag or {}
     -- 宝物系统兼容

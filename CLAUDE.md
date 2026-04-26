@@ -272,7 +272,7 @@ end
     jianghun, zhaomuling, power,           -- 特殊资源
     heroes = { [heroId] = { level, star, exp, fragments } },
     inventory = { exp_wine, star_stone, breakthrough, awaken_stone },
-    lineup = { formation, front = {}, back = {} },
+    lineup = { formation, front = {}, mid = {}, back = {} },
     currentMap, nodeStars = {}, clearedMaps = {},
     lastSaveTime, lastStaminaTime,
 }
@@ -345,7 +345,7 @@ connection:SendRemoteEvent(Shared.EVENTS.GAME_ACTION, true, data)
 | `star_up` | `{heroId}` | 英雄升星 |
 | `recruit` | - | 招募 |
 | `compose_hero` | `{heroId}` | 碎片合成 |
-| `set_lineup` | `{formation, front, back}` | 设置阵容 |
+| `set_lineup` | `{formation, front, mid, back}` | 设置阵容 |
 | `buy_shop_item` | `{itemId}` | 购买资源商品 |
 | `buy_gift_pack` | `{packId}` | 购买礼包 |
 | `recharge` | `{tierId}` | 模拟充值 |
@@ -393,7 +393,7 @@ Theme.QualityColor(heroData.quality + 1)
 
 ### 8.5 阵型
 
-前排 2 + 后排 3，自动回合制，20 回合超时判负。
+前排 3 + 中排 3 + 后排 3（3×3 九宫格），自动回合制，20 回合超时判负。
 
 ---
 

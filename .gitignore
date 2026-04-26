@@ -1,18 +1,34 @@
+# Build & dist
 .build/
 dist/
-.project/
-.tmp/
-.claude/
-.cli/
-.agent/
-.emmylua/
-.ssh/
-logs/
+
+# Engine internal (read-only, not user code)
 engine-docs/
 examples/
 templates/
 urhox-libs/
 schemas/
 lua-tools/
+.emmylua/
+
+# AI & tool config
+.claude/
+.cli/
+.agent/
 prompts/
+CLAUDE.md
+
+# Project config & temp
+.project/
+.tmp/
+logs/
+
+# SSH keys
+.ssh/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Meta files
 *.meta

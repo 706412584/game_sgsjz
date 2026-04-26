@@ -601,36 +601,32 @@ ACTION_HANDLERS["set_lineup"] = function(userId, params)
 
     -- 验证阵容有效性
     local front = params.front or {}
-    local back  = params.back or {}
-    if #front > 2 or #back > 3 then
+    local mid   = params.mid   or {}
+    local back  = params.back  or {}
+    if #front > 3 or #mid > 3 or #back > 3 then
         sendEvt(userId, "error", { msg = "阵容人数超限" })
         return
     end
 
-    -- 验证英雄存在且已激活（level > 0）
+    -- 验证英雄存在且已激活（level > 0），不重复
     local allIds = {}
-    for _, hid in ipairs(front) do
-        if not state.heroes[hid] or state.heroes[hid].level <= 0 then
-            sendEvt(userId, "error", { msg = "英雄不可用: " .. tostring(hid) })
-            return
+    local function validateRow(row)
+        for _, hid in ipairs(row) do
+            if not state.heroes[hid] or state.heroes[hid].level <= 0 then
+                sendEvt(userId, "error", { msg = "英雄不可用: " .. tostring(hid) })
+                return false
+            end
+            if allIds[hid] then
+                sendEvt(userId, "error", { msg = "英雄重复: " .. tostring(hid) })
+                return false
+            end
+            allIds[hid] = true
         end
-        if allIds[hid] then
-            sendEvt(userId, "error", { msg = "英雄重复: " .. tostring(hid) })
-            return
-        end
-        allIds[hid] = true
+        return true
     end
-    for _, hid in ipairs(back) do
-        if not state.heroes[hid] or state.heroes[hid].level <= 0 then
-            sendEvt(userId, "error", { msg = "英雄不可用: " .. tostring(hid) })
-            return
-        end
-        if allIds[hid] then
-            sendEvt(userId, "error", { msg = "英雄重复: " .. tostring(hid) })
-            return
-        end
-        allIds[hid] = true
-    end
+    if not validateRow(front) then return end
+    if not validateRow(mid)   then return end
+    if not validateRow(back)  then return end
 
     -- 阵法解锁校验
     local newFormation = params.formation or state.lineup.formation
@@ -643,6 +639,7 @@ ACTION_HANDLERS["set_lineup"] = function(userId, params)
 
     state.lineup.formation = newFormation
     state.lineup.front = front
+    state.lineup.mid   = mid
     state.lineup.back  = back
 
     -- 重算战力

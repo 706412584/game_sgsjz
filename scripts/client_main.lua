@@ -205,6 +205,7 @@ local function switchPage(pageId)
                     ClientNet.SendAction("set_lineup", {
                         formation = gs().lineup.formation,
                         front     = gs().lineup.front,
+                        mid       = gs().lineup.mid,
                         back      = gs().lineup.back,
                     })
                 else
@@ -212,6 +213,7 @@ local function switchPage(pageId)
                 end
                 HUD.Update(gs())
                 print("[阵容] 阵容已保存: 前排=" .. #gs().lineup.front
+                    .. " 中排=" .. #(gs().lineup.mid or {})
                     .. " 后排=" .. #gs().lineup.back)
             end,
         }))

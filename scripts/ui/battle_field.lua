@@ -1,9 +1,8 @@
 ------------------------------------------------------------
 -- ui/battle_field.lua  —— 战场武将卡牌组件 (flex 布局版)
--- 布局: 使用 flexDirection="row" + flexGrow spacer 实现对称 4 列
---   [spacer] [后排] [spacer] [前排] [中线spacer] [前排] [spacer] [后排] [spacer]
--- 卡牌是 flex 子元素，自动适配容器实际宽度（解决 safe area 偏移）
--- 参考: 风云天下 — 卡牌铺满战场，结果按钮浮在上层
+-- 布局: 使用 flexDirection="row" + flexGrow spacer 实现对称 6 列
+--   [spacer] [后排] [spacer] [中排] [spacer] [前排] [中线spacer] [前排] [spacer] [中排] [spacer] [后排] [spacer]
+-- 3×3 阵型: 前排3 + 中排3 + 后排3, 卡牌铺满战场
 ------------------------------------------------------------
 local UI      = require("urhox-libs/UI")
 local Theme   = require("ui.theme")
@@ -19,12 +18,12 @@ local M = {}
 local TOP_MARGIN = 54   -- 顶栏高度(52+2px线)
 local BOT_MARGIN = 4    -- 底边最小留白
 
--- flex spacer 比例 (控制列的水平分布)
--- 布局: [3] col [2] col [5] col [2] col [3]
--- 即: 外侧留白3 | 后排列 | 间距2 | 前排列 | 中线5 | 前排列 | 间距2 | 后排列 | 外侧留白3
-local GROW_OUTER  = 3   -- 两端留白
-local GROW_INNER  = 2   -- 前后排之间间距
-local GROW_CENTER = 5   -- 中线间距
+-- flex spacer 比例 (控制列的水平分布, 6列)
+-- 布局: [2] back [1] mid [1] front [4] front [1] mid [1] back [2]
+-- 即: 外侧2 | 后排 | 1 | 中排 | 1 | 前排 | 中线4 | 前排 | 1 | 中排 | 1 | 后排 | 外侧2
+local GROW_OUTER  = 2   -- 两端留白
+local GROW_INNER  = 1   -- 列间距(后-中, 中-前)
+local GROW_CENTER = 4   -- 中线间距
 
 -- 卡片尺寸上限
 local MAX_CARD_W  = 130
@@ -249,22 +248,23 @@ end
 
 ------------------------------------------------------------
 -- 估算列中心 X 位置 (给特效用)
--- 基于 flexGrow 比例计算: total = 3+cw+2+cw+5+cw+2+cw+3 = 15 + 4*cw(归一化)
+-- 6列布局 flexGrow: [2] back [1] mid [1] front [4] front [1] mid [1] back [2]
+-- spacer 总 grow = 2+1+1+4+1+1+2 = 12, 固定宽度 = 6*cardW_
 ------------------------------------------------------------
 local function estimateColCenterX(colKey, totalW)
-    -- spacer 总 grow = 3+2+5+2+3 = 15
-    -- 4 列各占 cardW_ 固定宽度
-    local fixedW = 4 * cardW_
+    local fixedW = 6 * cardW_
     local spacerW = math.max(0, totalW - fixedW)
-    local growUnit = spacerW / 15  -- 每单位 grow 对应的像素
+    local growUnit = spacerW / (GROW_OUTER * 2 + GROW_INNER * 4 + GROW_CENTER)
 
-    -- 从左到右:
-    -- [grow=3 spacer] [allyBack col] [grow=2 spacer] [allyFront col] [grow=5 spacer] [enemyFront col] [grow=2 spacer] [enemyBack col] [grow=3 spacer]
+    -- 从左到右: [2] back [1] mid [1] front [4] front [1] mid [1] back [2]
+    local x0 = GROW_OUTER * growUnit  -- 左侧留白后
     local colCenters = {
-        ally_back   = GROW_OUTER * growUnit + cardW_ * 0.5,
-        ally_front  = GROW_OUTER * growUnit + cardW_ + GROW_INNER * growUnit + cardW_ * 0.5,
-        enemy_front = GROW_OUTER * growUnit + cardW_ + GROW_INNER * growUnit + cardW_ + GROW_CENTER * growUnit + cardW_ * 0.5,
-        enemy_back  = GROW_OUTER * growUnit + cardW_ + GROW_INNER * growUnit + cardW_ + GROW_CENTER * growUnit + cardW_ + GROW_INNER * growUnit + cardW_ * 0.5,
+        ally_back   = x0 + cardW_ * 0.5,
+        ally_mid    = x0 + cardW_ + GROW_INNER * growUnit + cardW_ * 0.5,
+        ally_front  = x0 + cardW_ * 2 + GROW_INNER * 2 * growUnit + cardW_ * 0.5,
+        enemy_front = x0 + cardW_ * 3 + GROW_INNER * 2 * growUnit + GROW_CENTER * growUnit + cardW_ * 0.5,
+        enemy_mid   = x0 + cardW_ * 4 + GROW_INNER * 3 * growUnit + GROW_CENTER * growUnit + cardW_ * 0.5,
+        enemy_back  = x0 + cardW_ * 5 + GROW_INNER * 4 * growUnit + GROW_CENTER * growUnit + cardW_ * 0.5,
     }
     return colCenters[colKey] or (totalW * 0.5)
 end
@@ -298,29 +298,33 @@ function M.Create(parent, allies, enemies, pW, pH)
         "[BattleField] screenW=%.0f safeW=%.0f pH=%.0f availH=%.0f cardW=%d cardH=%d avatar=%d",
         pW, safeW, pH, availH, cardW_, cardH_, avatarSize_))
 
-    -- 分前后排
-    local allyFront, allyBack = {}, {}
+    -- 分前/中/后排
+    local allyFront, allyMid, allyBack = {}, {}, {}
     for _, u in ipairs(allies) do
         if u.row == "front" then allyFront[#allyFront + 1] = u
+        elseif u.row == "mid" then allyMid[#allyMid + 1] = u
         else allyBack[#allyBack + 1] = u end
     end
-    local enemyFront, enemyBack = {}, {}
+    local enemyFront, enemyMid, enemyBack = {}, {}, {}
     for _, u in ipairs(enemies) do
         if u.row == "front" then enemyFront[#enemyFront + 1] = u
+        elseif u.row == "mid" then enemyMid[#enemyMid + 1] = u
         else enemyBack[#enemyBack + 1] = u end
     end
 
     print(string.format(
-        "[BattleField] 单位数: allyBack=%d allyFront=%d | enemyFront=%d enemyBack=%d",
-        #allyBack, #allyFront, #enemyFront, #enemyBack))
+        "[BattleField] 单位数: allyB=%d allyM=%d allyF=%d | enemyF=%d enemyM=%d enemyB=%d",
+        #allyBack, #allyMid, #allyFront, #enemyFront, #enemyMid, #enemyBack))
 
-    -- 构建 4 列
+    -- 构建 6 列
     local colAllyBack   = createColumn(allyBack,   "ally",  "ally_back")
+    local colAllyMid    = createColumn(allyMid,    "ally",  "ally_mid")
     local colAllyFront  = createColumn(allyFront,  "ally",  "ally_front")
     local colEnemyFront = createColumn(enemyFront, "enemy", "enemy_front")
+    local colEnemyMid   = createColumn(enemyMid,   "enemy", "enemy_mid")
     local colEnemyBack  = createColumn(enemyBack,  "enemy", "enemy_back")
 
-    -- flex row 容器: spacer + col + spacer + col + center spacer + col + spacer + col + spacer
+    -- flex row: [2] back [1] mid [1] front [4] front [1] mid [1] back [2]
     gridRow_ = UI.Panel {
         width          = "100%",
         height         = "100%",
@@ -331,11 +335,15 @@ function M.Create(parent, allies, enemies, pW, pH)
         children       = {
             spacer(GROW_OUTER),     -- 左侧留白
             colAllyBack,            -- 我方后排
-            spacer(GROW_INNER),     -- 后排-前排间距
+            spacer(GROW_INNER),     -- 后-中间距
+            colAllyMid,             -- 我方中排
+            spacer(GROW_INNER),     -- 中-前间距
             colAllyFront,           -- 我方前排
             spacer(GROW_CENTER),    -- 中线留白
             colEnemyFront,          -- 敌方前排
-            spacer(GROW_INNER),     -- 前排-后排间距
+            spacer(GROW_INNER),     -- 前-中间距
+            colEnemyMid,            -- 敌方中排
+            spacer(GROW_INNER),     -- 中-后间距
             colEnemyBack,           -- 敌方后排
             spacer(GROW_OUTER),     -- 右侧留白
         },

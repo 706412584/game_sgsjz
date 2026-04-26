@@ -1,6 +1,6 @@
 ------------------------------------------------------------
 -- ui/page_formation.lua  —— 三国神将录 阵容编辑页面
--- 前排2 + 后排3 布阵, 支持拖放 + 点击双模式
+-- 前排3 + 中排3 + 后排3 布阵, 支持拖放 + 点击双模式
 ------------------------------------------------------------
 local UI    = require("urhox-libs/UI")
 local Theme = require("ui.theme")
@@ -16,11 +16,12 @@ local M = {}
 -- 内部状态
 local pagePanel_, gameState_, callbacks_
 local editFront_ = {}
+local editMid_   = {}
 local editBack_  = {}
 local editFormation_ = "feng_shi"
 
 -- UI 引用
-local slotPanels_    = { front = {}, back = {} }
+local slotPanels_    = { front = {}, mid = {}, back = {} }
 local powerLabel_, heroListContainer_, heroListScroll_
 local formationBtnLabel_, formationDescLabel_, formationListPanel_
 
@@ -46,7 +47,8 @@ local startHeroDrag
 ------------------------------------------------------------
 -- 辅助
 ------------------------------------------------------------
-local FRONT_MAX = 2
+local FRONT_MAX = 3
+local MID_MAX   = 3
 local BACK_MAX  = 3
 
 --- 统计数组中非 nil 元素数量(支持稀疏数组)
@@ -64,6 +66,7 @@ end
 
 local function isInLineup(heroId)
     for i = 1, FRONT_MAX do if editFront_[i] == heroId then return true end end
+    for i = 1, MID_MAX   do if editMid_[i]   == heroId then return true end end
     for i = 1, BACK_MAX  do if editBack_[i]  == heroId then return true end end
     return false
 end
@@ -72,6 +75,7 @@ local function calcTeamPower()
     local total = 0
     local all = {}
     for i = 1, FRONT_MAX do if editFront_[i] then all[#all + 1] = editFront_[i] end end
+    for i = 1, MID_MAX   do if editMid_[i]   then all[#all + 1] = editMid_[i]   end end
     for i = 1, BACK_MAX  do if editBack_[i]  then all[#all + 1] = editBack_[i]  end end
     for _, hid in ipairs(all) do
         local hd = DH.Get(hid)
@@ -236,19 +240,19 @@ local function initDragDrop()
             -- 槽位拖到空白区域 → 下阵
             if not targetSlot and itemData._srcType == "slot" then
                 local si = itemData._slotInfo
-                local arr = si.row == "front" and editFront_ or editBack_
+                local arr = si.row == "front" and editFront_ or (si.row == "mid" and editMid_ or editBack_)
                 arr[si.idx] = nil
                 refreshSlots()
                 return
             end
             if not success then return end
             local ti = targetSlot._fmtInfo
-            local tArr = ti.row == "front" and editFront_ or editBack_
+            local tArr = ti.row == "front" and editFront_ or (ti.row == "mid" and editMid_ or editBack_)
             if itemData._srcType == "list" then
                 tArr[ti.idx] = itemData.heroId
             elseif itemData._srcType == "slot" then
                 local si = itemData._slotInfo
-                local sArr = si.row == "front" and editFront_ or editBack_
+                local sArr = si.row == "front" and editFront_ or (si.row == "mid" and editMid_ or editBack_)
                 local srcH, tgtH = sArr[si.idx], tArr[ti.idx]
                 sArr[si.idx] = tgtH
                 tArr[ti.idx] = srcH
@@ -308,8 +312,9 @@ end
 -- 刷新阵容槽位 UI
 ------------------------------------------------------------
 function refreshSlots()
-    for idx = 1, 2 do renderSlotContent(slotPanels_.front[idx], editFront_[idx], "前排"..idx) end
-    for idx = 1, 3 do renderSlotContent(slotPanels_.back[idx],  editBack_[idx],  "后排"..idx) end
+    for idx = 1, FRONT_MAX do renderSlotContent(slotPanels_.front[idx], editFront_[idx], "前排"..idx) end
+    for idx = 1, MID_MAX   do renderSlotContent(slotPanels_.mid[idx],   editMid_[idx],   "中排"..idx) end
+    for idx = 1, BACK_MAX  do renderSlotContent(slotPanels_.back[idx],  editBack_[idx],  "后排"..idx) end
     if powerLabel_ then
         powerLabel_:SetText("预估战力: " .. Theme.FormatNumber(calcTeamPower()))
     end
@@ -322,7 +327,7 @@ end
 local function onSlotClick(row, idx)
     print(string.format("[FMT] onSlotClick %s[%d] frame=%d dragEndFrame=%d", row, idx, time.frameNumber, dragEndFrame_))
     if time.frameNumber == dragEndFrame_ then print("[FMT] slotClick SKIP (dragEnd same frame)"); return end
-    local arr = row == "front" and editFront_ or editBack_
+    local arr = row == "front" and editFront_ or (row == "mid" and editMid_ or editBack_)
     if arr[idx] then
         arr[idx] = nil
         refreshSlots()
@@ -360,14 +365,17 @@ local function createHeroRow(heroId)
             end
             local placed = false
             local fi = firstEmptySlot(editFront_, FRONT_MAX)
+            local mi = firstEmptySlot(editMid_, MID_MAX)
             local bi = firstEmptySlot(editBack_, BACK_MAX)
             if fi then
                 editFront_[fi] = heroId; placed = true
+            elseif mi then
+                editMid_[mi] = heroId; placed = true
             elseif bi then
                 editBack_[bi] = heroId; placed = true
             end
             if placed then print("[FMT] placed " .. heroId); refreshSlots()
-            else Modal.Alert("提示", "阵容已满(前排2+后排3)") end
+            else Modal.Alert("提示", "阵容已满(前排3+中排3+后排3)") end
         end,
         onPointerDown = function(event, self)
             if isInLineup(heroId) then return end
@@ -530,10 +538,12 @@ end
 local function saveLineup()
     gameState_.lineup.formation = editFormation_
     -- 紧凑化：保存时去掉 nil 空洞，发给服务端的是连续数组
-    local f, b = {}, {}
+    local f, m, b = {}, {}, {}
     for i = 1, FRONT_MAX do if editFront_[i] then f[#f + 1] = editFront_[i] end end
+    for i = 1, MID_MAX   do if editMid_[i]   then m[#m + 1] = editMid_[i]   end end
     for i = 1, BACK_MAX  do if editBack_[i]  then b[#b + 1] = editBack_[i]  end end
     gameState_.lineup.front = f
+    gameState_.lineup.mid   = m
     gameState_.lineup.back  = b
     -- 标记：防止服务端同步回来后 Refresh 覆盖本地槽位排列
     justSaved_ = true
@@ -545,11 +555,12 @@ end
 function M.Create(gameState, callbacks)
     gameState_ = gameState
     callbacks_ = callbacks or {}
-    slotPanels_ = { front = {}, back = {} }
+    slotPanels_ = { front = {}, mid = {}, back = {} }
 
-    editFront_, editBack_ = {}, {}
+    editFront_, editMid_, editBack_ = {}, {}, {}
     editFormation_ = gameState.lineup.formation or DF.GetDefault()
     for _, h in ipairs(gameState.lineup.front or {}) do editFront_[#editFront_ + 1] = h end
+    for _, h in ipairs(gameState.lineup.mid   or {}) do editMid_[#editMid_ + 1] = h end
     for _, h in ipairs(gameState.lineup.back  or {}) do editBack_[#editBack_ + 1] = h end
 
     -- 初始化拖放
@@ -567,7 +578,7 @@ function M.Create(gameState, callbacks)
             width = 72, alignItems = "center", gap = 2, paddingVertical = 4,
             onClick = function() onSlotClick(row, i) end,
             onPointerDown = function(event, self)
-                local arr = row == "front" and editFront_ or editBack_
+                local arr = row == "front" and editFront_ or (row == "mid" and editMid_ or editBack_)
                 if arr[i] and dragCtx_ then
                     local sx, sy = getPointerBasePos()
                     startHeroDrag(
@@ -603,9 +614,11 @@ function M.Create(gameState, callbacks)
     end
 
     local frontSlots = {}
-    for i = 1, 2 do frontSlots[i] = makeSlot("front", i) end
+    for i = 1, FRONT_MAX do frontSlots[i] = makeSlot("front", i) end
+    local midSlots = {}
+    for i = 1, MID_MAX do midSlots[i] = makeSlot("mid", i) end
     local backSlots = {}
-    for i = 1, 3 do backSlots[i] = makeSlot("back", i) end
+    for i = 1, BACK_MAX do backSlots[i] = makeSlot("back", i) end
 
     -- 阵法选择
     local curF = DF.Get(editFormation_)
@@ -660,8 +673,10 @@ function M.Create(gameState, callbacks)
             formationSelector,
             Comp.SanDivider({ spacing = 4 }),
             UI.Label { text = "前排 (坦克/近战)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginBottom = 2 },
-            UI.Panel { flexDirection = "row", justifyContent = "center", gap = 16, children = frontSlots },
-            UI.Label { text = "后排 (输出/辅助)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginTop = 6, marginBottom = 2 },
+            UI.Panel { flexDirection = "row", justifyContent = "center", gap = 12, children = frontSlots },
+            UI.Label { text = "中排 (突击/游击)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginTop = 4, marginBottom = 2 },
+            UI.Panel { flexDirection = "row", justifyContent = "center", gap = 12, children = midSlots },
+            UI.Label { text = "后排 (输出/辅助)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginTop = 4, marginBottom = 2 },
             UI.Panel { flexDirection = "row", justifyContent = "center", gap = 12, children = backSlots },
         },
     }
@@ -673,14 +688,14 @@ function M.Create(gameState, callbacks)
             Comp.SanButton({ text = "清空阵容", variant = "secondary", width = 100, height = S.btnSmHeight, fontSize = S.btnSmFontSize,
                 onClick = function()
                     Modal.Confirm("确认", "确定清空当前阵容？", function()
-                        editFront_, editBack_ = {}, {}
+                        editFront_, editMid_, editBack_ = {}, {}, {}
                         refreshSlots()
                     end)
                 end,
             }),
             Comp.SanButton({ text = "保存阵容", variant = "primary", width = 140, height = S.btnSmHeight, fontSize = S.btnSmFontSize,
                 onClick = function()
-                    local total = countSlots(editFront_, FRONT_MAX) + countSlots(editBack_, BACK_MAX)
+                    local total = countSlots(editFront_, FRONT_MAX) + countSlots(editMid_, MID_MAX) + countSlots(editBack_, BACK_MAX)
                     if total == 0 then Modal.Alert("提示", "阵容至少需要1名武将！"); return end
                     saveLineup()
                     local fName = DF.Get(editFormation_)
@@ -732,9 +747,10 @@ function M.Refresh(gameState)
         justSaved_ = false
     else
         -- 非保存触发的同步: 用服务端数据重建槽位
-        editFront_, editBack_ = {}, {}
+        editFront_, editMid_, editBack_ = {}, {}, {}
         editFormation_ = gameState.lineup.formation or DF.GetDefault()
         for _, h in ipairs(gameState.lineup.front or {}) do editFront_[#editFront_ + 1] = h end
+        for _, h in ipairs(gameState.lineup.mid   or {}) do editMid_[#editMid_ + 1] = h end
         for _, h in ipairs(gameState.lineup.back  or {}) do editBack_[#editBack_ + 1] = h end
     end
     refreshFormationDisplay()

@@ -34,7 +34,8 @@ M.FORMATIONS = {
         desc       = "攻守兼备的基础阵法",
         detail     = "全队统率+5%, 勇武+5%",
         unlock     = { type = "default" },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             tong_pct = 0.05,
@@ -51,7 +52,8 @@ M.FORMATIONS = {
         desc       = "后排输出大幅提升",
         detail     = "后排攻击+15%, 全队智力+8%",
         unlock     = { type = "map", value = 5 },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             back_atk_pct = 0.15,
@@ -64,7 +66,8 @@ M.FORMATIONS = {
         desc       = "前排坚不可摧",
         detail     = "前排防御+20%, 全队兵力+10%",
         unlock     = { type = "map", value = 10 },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             front_def_pct = 0.20,
@@ -77,7 +80,8 @@ M.FORMATIONS = {
         desc       = "速攻先手，首轮士气高涨",
         detail     = "全队初始士气+30, 暴击+5%",
         unlock     = { type = "map", value = 15 },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             morale_init = 30,
@@ -90,7 +94,8 @@ M.FORMATIONS = {
         desc       = "远程法师阵法，智力大幅提升",
         detail     = "全队智力+15%, 后排攻击+10%",
         unlock     = { type = "map", value = 20 },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             zhi_pct      = 0.15,
@@ -103,7 +108,8 @@ M.FORMATIONS = {
         desc       = "铁壁防御，削减敌方士气",
         detail     = "全队防御+12%, 兵力+8%, 闪避+3%",
         unlock     = { type = "map", value = 30 },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             def_pct = 0.12,
@@ -117,7 +123,8 @@ M.FORMATIONS = {
         desc       = "诸葛亮所创，攻防一体",
         detail     = "全队三围+10%, 暴击+3%",
         unlock     = { type = "map", value = 40 },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             tong_pct = 0.10,
@@ -132,7 +139,8 @@ M.FORMATIONS = {
         desc       = "厚积薄发，续航持久",
         detail     = "全队兵力+18%, 防御+8%, 初始士气+15",
         unlock     = { type = "map", value = 50 },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             hp_pct      = 0.18,
@@ -146,7 +154,8 @@ M.FORMATIONS = {
         desc       = "极致爆发，一击必杀",
         detail     = "全队攻击+18%, 暴击+8%, 闪避+3%",
         unlock     = { type = "map", value = 60 },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             atk_pct = 0.18,
@@ -160,7 +169,8 @@ M.FORMATIONS = {
         desc       = "传说中的至尊阵法",
         detail     = "全队三围+12%, 兵力+12%, 暴击+5%, 初始士气+20",
         unlock     = { type = "map", value = 80 },
-        frontSlots = 2,
+        frontSlots = 3,
+        midSlots   = 3,
         backSlots  = 3,
         buffs      = {
             tong_pct    = 0.12,
@@ -262,6 +272,8 @@ function M.GetBuffName(attr)
         dodge         = "闪避率",
         morale_init   = "初始士气",
         front_def_pct = "前排防御",
+        mid_atk_pct   = "中排攻击",
+        mid_def_pct   = "中排防御",
         back_atk_pct  = "后排攻击",
     }
     return names[attr] or attr
