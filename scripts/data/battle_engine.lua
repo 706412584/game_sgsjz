@@ -109,6 +109,9 @@ local function assignRowIdx(units)
     for i, u in ipairs(back) do u.rowIdx = bIdx[i] end
 end
 
+-- 前向声明(定义在后方, 此处仅声明以消除 undefined-global 警告)
+local getAliveUnits
+
 --- 列深度搜索: 从指定深度序列中找同列(rowIdx)存活敌人
 --- depthOrder 例如 {"front","mid","back"} 表示先搜前排再中再后
 ---@param allUnits BattleUnit[]
@@ -690,7 +693,7 @@ end
 ---@param side string
 ---@param row string|nil
 ---@return BattleUnit[]
-local function getAliveUnits(units, side, row)
+getAliveUnits = function(units, side, row)
     local result = {}
     for _, u in ipairs(units) do
         if u.alive and u.side == side then

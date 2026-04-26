@@ -8,6 +8,7 @@ local DM = require("data.data_maps")
 local DE = require("data.data_equip")
 local DT = require("data.data_troops")
 local TS = require("data.treasure_state")
+local DF = require("data.data_formation")
 
 local M = {}
 
@@ -76,12 +77,12 @@ function M.CreateDefaultState()
             xiaohoudun   = { level = 7,  star = 1, exp = 0, fragments = 0 },
         },
 
-        -- 阵容 (3×3: 前排3 + 中排3 + 后排3)
+        -- 阵容 (锋矢阵: 前排2 + 中排1 + 后排2 = 5)
         lineup = {
             formation = "feng_shi",
-            front = { "lvbu", "zhangfei", "xiaohoudun" },
-            mid   = { "guanyu", "zhaoyun", "huangzhong" },
-            back  = { "zhugeliang", "diaochan", "caiwenji" },
+            front = { "lvbu", "zhangfei" },
+            mid   = { "guanyu" },
+            back  = { "zhugeliang", "diaochan" },
         },
 
         -- 背包
@@ -816,6 +817,16 @@ local function patchState(s)
     s.zhaomuling = s.zhaomuling or 0
     s.lineup = s.lineup or { formation = "feng_shi", front = {}, mid = {}, back = {} }
     s.lineup.mid = s.lineup.mid or {}  -- 旧存档兼容: 补充中排
+    -- 旧存档兼容: 裁减超出阵型槽位的英雄
+    local fmtData = DF.Get(s.lineup.formation)
+    if fmtData then
+        local maxF = fmtData.frontSlots or 3
+        local maxM = fmtData.midSlots   or 3
+        local maxB = fmtData.backSlots  or 3
+        while #s.lineup.front > maxF do table.remove(s.lineup.front) end
+        while #s.lineup.mid   > maxM do table.remove(s.lineup.mid)   end
+        while #s.lineup.back  > maxB do table.remove(s.lineup.back)  end
+    end
     s.inventory.reforge_stone = s.inventory.reforge_stone or 0
     s.equipBag = s.equipBag or {}
     -- 宝物系统兼容

@@ -603,7 +603,14 @@ ACTION_HANDLERS["set_lineup"] = function(userId, params)
     local front = params.front or {}
     local mid   = params.mid   or {}
     local back  = params.back  or {}
-    if #front > 3 or #mid > 3 or #back > 3 then
+
+    -- 根据阵型的槽位配置验证人数上限
+    local newFormation = params.formation or state.lineup.formation
+    local fmtData = DF.Get(newFormation)
+    local maxF = fmtData and fmtData.frontSlots or 3
+    local maxM = fmtData and fmtData.midSlots   or 3
+    local maxB = fmtData and fmtData.backSlots  or 3
+    if #front > maxF or #mid > maxM or #back > maxB then
         sendEvt(userId, "error", { msg = "阵容人数超限" })
         return
     end
@@ -629,7 +636,6 @@ ACTION_HANDLERS["set_lineup"] = function(userId, params)
     if not validateRow(back)  then return end
 
     -- 阵法解锁校验
-    local newFormation = params.formation or state.lineup.formation
     if newFormation and newFormation ~= state.lineup.formation then
         if not DF.IsUnlocked(newFormation, state) then
             sendEvt(userId, "error", { msg = "阵法尚未解锁" })

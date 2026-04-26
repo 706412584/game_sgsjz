@@ -51,6 +51,28 @@ local FRONT_MAX = 3
 local MID_MAX   = 3
 local BACK_MAX  = 3
 
+--- 当前阵型各排解锁槽位数
+local unlockedFront_ = 3
+local unlockedMid_   = 3
+local unlockedBack_  = 3
+
+--- 根据阵型更新解锁槽位数
+local function updateUnlockedSlots()
+    local f = DF.Get(editFormation_)
+    if f then
+        unlockedFront_ = f.frontSlots or FRONT_MAX
+        unlockedMid_   = f.midSlots   or MID_MAX
+        unlockedBack_  = f.backSlots  or BACK_MAX
+    end
+end
+
+--- 判断某排某索引是否已解锁
+local function isSlotUnlocked(row, idx)
+    if row == "front" then return idx <= unlockedFront_ end
+    if row == "mid"   then return idx <= unlockedMid_   end
+    return idx <= unlockedBack_
+end
+
 --- 统计数组中非 nil 元素数量(支持稀疏数组)
 local function countSlots(arr, maxLen)
     local c = 0
@@ -227,6 +249,7 @@ local function initDragDrop()
         canDrop = function(itemData, sourceSlot, targetSlot)
             local ti = targetSlot and targetSlot._fmtInfo
             if not ti then return false end
+            if not isSlotUnlocked(ti.row, ti.idx) then return false end
             if itemData._srcType == "list" then
                 if isInLineup(itemData.heroId) then return false end
             elseif itemData._srcType == "slot" then
@@ -266,8 +289,26 @@ end
 ------------------------------------------------------------
 -- 槽位渲染(公共函数)
 ------------------------------------------------------------
-local function renderSlotContent(panel, heroId, label)
+local function renderSlotContent(panel, heroId, label, row, idx)
     panel:ClearChildren()
+    local locked = not isSlotUnlocked(row, idx)
+    if locked then
+        -- 锁定槽位: 灰色锁状态
+        panel:AddChild(UI.Panel {
+            width = 52, height = 52, borderRadius = 6,
+            borderColor = { 60, 60, 70, 180 }, borderWidth = 2,
+            justifyContent = "center", alignItems = "center",
+            backgroundColor = { 30, 30, 35, 200 },
+            pointerEvents = "none",
+            children = { UI.Label { text = "x", fontSize = 16, fontColor = { 80, 80, 90, 200 } } },
+        })
+        panel:AddChild(UI.Label {
+            text = "未解锁", fontSize = 8, fontColor = { 80, 80, 90, 200 },
+            textAlign = "center", marginTop = 2,
+            pointerEvents = "none",
+        })
+        return
+    end
     if heroId then
         local hd = DH.Get(heroId)
         local st = getHeroStats(heroId)
@@ -312,9 +353,15 @@ end
 -- 刷新阵容槽位 UI
 ------------------------------------------------------------
 function refreshSlots()
-    for idx = 1, FRONT_MAX do renderSlotContent(slotPanels_.front[idx], editFront_[idx], "前排"..idx) end
-    for idx = 1, MID_MAX   do renderSlotContent(slotPanels_.mid[idx],   editMid_[idx],   "中排"..idx) end
-    for idx = 1, BACK_MAX  do renderSlotContent(slotPanels_.back[idx],  editBack_[idx],  "后排"..idx) end
+    updateUnlockedSlots()
+    -- 切换阵型时，超出解锁范围的武将下阵
+    for i = 1, FRONT_MAX do if not isSlotUnlocked("front", i) then editFront_[i] = nil end end
+    for i = 1, MID_MAX   do if not isSlotUnlocked("mid",   i) then editMid_[i]   = nil end end
+    for i = 1, BACK_MAX  do if not isSlotUnlocked("back",  i) then editBack_[i]  = nil end end
+
+    for idx = 1, FRONT_MAX do renderSlotContent(slotPanels_.front[idx], editFront_[idx], "前排"..idx, "front", idx) end
+    for idx = 1, MID_MAX   do renderSlotContent(slotPanels_.mid[idx],   editMid_[idx],   "中排"..idx, "mid",   idx) end
+    for idx = 1, BACK_MAX  do renderSlotContent(slotPanels_.back[idx],  editBack_[idx],  "后排"..idx, "back",  idx) end
     if powerLabel_ then
         powerLabel_:SetText("预估战力: " .. Theme.FormatNumber(calcTeamPower()))
     end
@@ -327,6 +374,7 @@ end
 local function onSlotClick(row, idx)
     print(string.format("[FMT] onSlotClick %s[%d] frame=%d dragEndFrame=%d", row, idx, time.frameNumber, dragEndFrame_))
     if time.frameNumber == dragEndFrame_ then print("[FMT] slotClick SKIP (dragEnd same frame)"); return end
+    if not isSlotUnlocked(row, idx) then return end
     local arr = row == "front" and editFront_ or (row == "mid" and editMid_ or editBack_)
     if arr[idx] then
         arr[idx] = nil
@@ -364,9 +412,9 @@ local function createHeroRow(heroId)
                 return
             end
             local placed = false
-            local fi = firstEmptySlot(editFront_, FRONT_MAX)
-            local mi = firstEmptySlot(editMid_, MID_MAX)
-            local bi = firstEmptySlot(editBack_, BACK_MAX)
+            local fi = firstEmptySlot(editFront_, unlockedFront_)
+            local mi = firstEmptySlot(editMid_, unlockedMid_)
+            local bi = firstEmptySlot(editBack_, unlockedBack_)
             if fi then
                 editFront_[fi] = heroId; placed = true
             elseif mi then
@@ -374,8 +422,9 @@ local function createHeroRow(heroId)
             elseif bi then
                 editBack_[bi] = heroId; placed = true
             end
+            local totalSlots = unlockedFront_ + unlockedMid_ + unlockedBack_
             if placed then print("[FMT] placed " .. heroId); refreshSlots()
-            else Modal.Alert("提示", "阵容已满(前排3+中排3+后排3)") end
+            else Modal.Alert("提示", "阵容已满(共"..totalSlots.."个槽位)") end
         end,
         onPointerDown = function(event, self)
             if isInLineup(heroId) then return end
@@ -503,6 +552,7 @@ local function buildFormationList()
                 refreshFormationDisplay()
                 formationListPanel_:SetVisible(false)
                 YGNodeStyleSetDisplay(formationListPanel_.node, YGDisplayNone)
+                refreshSlots()
             end,
             children = {
                 UI.Panel {
@@ -537,11 +587,12 @@ end
 ------------------------------------------------------------
 local function saveLineup()
     gameState_.lineup.formation = editFormation_
-    -- 紧凑化：保存时去掉 nil 空洞，发给服务端的是连续数组
+    updateUnlockedSlots()
+    -- 紧凑化：只保存解锁范围内的英雄，去掉 nil 空洞
     local f, m, b = {}, {}, {}
-    for i = 1, FRONT_MAX do if editFront_[i] then f[#f + 1] = editFront_[i] end end
-    for i = 1, MID_MAX   do if editMid_[i]   then m[#m + 1] = editMid_[i]   end end
-    for i = 1, BACK_MAX  do if editBack_[i]  then b[#b + 1] = editBack_[i]  end end
+    for i = 1, unlockedFront_ do if editFront_[i] then f[#f + 1] = editFront_[i] end end
+    for i = 1, unlockedMid_   do if editMid_[i]   then m[#m + 1] = editMid_[i]   end end
+    for i = 1, unlockedBack_  do if editBack_[i]  then b[#b + 1] = editBack_[i]  end end
     gameState_.lineup.front = f
     gameState_.lineup.mid   = m
     gameState_.lineup.back  = b
@@ -562,6 +613,9 @@ function M.Create(gameState, callbacks)
     for _, h in ipairs(gameState.lineup.front or {}) do editFront_[#editFront_ + 1] = h end
     for _, h in ipairs(gameState.lineup.mid   or {}) do editMid_[#editMid_ + 1] = h end
     for _, h in ipairs(gameState.lineup.back  or {}) do editBack_[#editBack_ + 1] = h end
+
+    -- 初始化解锁槽位数
+    updateUnlockedSlots()
 
     -- 初始化拖放
     initDragDrop()
@@ -678,6 +732,7 @@ function M.Create(gameState, callbacks)
             UI.Panel { flexDirection = "row", justifyContent = "center", gap = 12, children = midSlots },
             UI.Label { text = "后排 (输出/辅助)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginTop = 4, marginBottom = 2 },
             UI.Panel { flexDirection = "row", justifyContent = "center", gap = 12, children = backSlots },
+            UI.Panel { height = 8 }, -- 底部留白
         },
     }
 
@@ -711,12 +766,17 @@ function M.Create(gameState, callbacks)
     heroListContainer_ = UI.Panel { width = "100%", flexDirection = "column", gap = 4, padding = 4 }
     heroListScroll_ = UI.ScrollView { flexGrow = 1, flexBasis = 0, scrollY = true, padding = 4, children = { heroListContainer_ } }
 
+    local leftScroll = UI.ScrollView {
+        width = "45%", flexShrink = 0, scrollY = true,
+        showScrollbar = false,
+        padding = 8, gap = 6,
+        children = { formationPanel, buttonRow },
+    }
+
     pagePanel_ = UI.Panel {
         width = "100%", flexGrow = 1, flexBasis = 0, flexDirection = "row", backgroundColor = C.bg,
         children = {
-            UI.Panel { width = "45%", flexDirection = "column", padding = 8, gap = 6,
-                children = { formationPanel, buttonRow },
-            },
+            leftScroll,
             UI.Panel { width = 1, backgroundColor = C.divider },
             UI.Panel { flexGrow = 1, flexBasis = 0, flexDirection = "column",
                 children = {
