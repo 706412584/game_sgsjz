@@ -6,6 +6,8 @@ local DT = require("data.data_troops")
 
 local M = {}
 
+---@type Scene
+local audioScene_
 ---@type Node
 local soundNode_
 ---@type table<string, Sound>
@@ -61,9 +63,12 @@ function M.Init()
             print("[BattleAudio] 加载失败: " .. path)
         end
     end
-    -- 创建音效播放节点
+    -- 创建独立 Scene + 音效播放节点（客户端无 scene_ 全局变量）
+    if not audioScene_ then
+        audioScene_ = Scene()
+    end
     if not soundNode_ or soundNode_:IsNull() then
-        soundNode_ = scene_:CreateChild("BattleSFX")
+        soundNode_ = audioScene_:CreateChild("BattleSFX")
     end
 end
 
@@ -143,6 +148,7 @@ function M.Clear()
         soundNode_:Remove()
     end
     soundNode_ = nil
+    audioScene_ = nil
 end
 
 return M
