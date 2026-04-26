@@ -439,8 +439,8 @@ function M.CreateHeroUnit(heroId, heroState, side, row)
         end
     end
 
-    -- 兵力(HP) = 统 * 10 + 勇 * 5 + 等级 * 30
-    local maxHp = math.floor(tong * 10 + yong * 5 + level * 30)
+    -- 兵力 = 英雄独立属性 hp（不再通过三围计算）
+    local maxHp = hd.stats.hp or 3000
 
     -- 兵种分类被动加成
     local catPassives = troopCat and DT.GetCatPassives(troopCat) or {}

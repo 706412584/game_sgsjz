@@ -432,14 +432,39 @@ local function buildDetailPanel(heroId, heroState)
 
         Comp.SanDivider(),
 
-        -- 三围详情（含上限）
+        -- 三围详情 + 兵力
         UI.Panel {
-            flexDirection  = "row",
-            justifyContent = "space-around",
+            gap = 4,
             children = {
-                createStatBlock("统", db.stats.tong, db.caps.tong, C.faction_wei),
-                createStatBlock("勇", db.stats.yong, db.caps.yong, C.red),
-                createStatBlock("智", db.stats.zhi,  db.caps.zhi,  C.mp),
+                UI.Panel {
+                    flexDirection  = "row",
+                    justifyContent = "space-around",
+                    children = {
+                        createStatBlock("统", db.stats.tong, db.caps.tong, C.faction_wei),
+                        createStatBlock("勇", db.stats.yong, db.caps.yong, C.red),
+                        createStatBlock("智", db.stats.zhi,  db.caps.zhi,  C.mp),
+                    },
+                },
+                UI.Panel {
+                    flexDirection  = "row",
+                    justifyContent = "center",
+                    alignItems     = "center",
+                    gap            = 6,
+                    marginTop      = 2,
+                    children = {
+                        UI.Label {
+                            text      = "兵力",
+                            fontSize  = Theme.fontSize.caption,
+                            fontColor = C.textDim,
+                        },
+                        UI.Label {
+                            text       = tostring(db.stats.hp or 3000),
+                            fontSize   = Theme.fontSize.headline,
+                            fontColor  = C.hp,
+                            fontWeight = "bold",
+                        },
+                    },
+                },
             },
         },
 
