@@ -1207,6 +1207,8 @@ local function executeAction(actor, allUnits)
                     action.targets[#action.targets + 1] = t.name
                     action.heals[#action.heals + 1] = actual
                     action.damages[#action.damages + 1] = 0
+                    action.isCrit[#action.isCrit + 1] = false
+                    action.killed[#action.killed + 1] = false
 
                 elseif eff.type == EFFECT.SHIELD then
                     local shieldVal = math.floor(t.maxHp * (eff.pct or 0.1))
@@ -1214,12 +1216,16 @@ local function executeAction(actor, allUnits)
                     action.targets[#action.targets + 1] = t.name
                     action.statuses[#action.statuses + 1] = { target = t.name, status = "shield", value = shieldVal }
                     action.damages[#action.damages + 1] = 0
+                    action.isCrit[#action.isCrit + 1] = false
+                    action.killed[#action.killed + 1] = false
 
                 elseif eff.type == EFFECT.BUFF then
                     tryApplyStatus(t, eff.buff or STATUS.ATK_UP, eff.dur or 2, 1.0, 0)
                     action.targets[#action.targets + 1] = t.name
                     action.statuses[#action.statuses + 1] = { target = t.name, status = eff.buff or "atk_up" }
                     action.damages[#action.damages + 1] = 0
+                    action.isCrit[#action.isCrit + 1] = false
+                    action.killed[#action.killed + 1] = false
                 end
             end
 

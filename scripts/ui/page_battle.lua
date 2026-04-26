@@ -157,6 +157,9 @@ local function showActionEffects(action)
             if killed[i] then
                 if pos then BFX.ShowKill(pos.x, pos.y + 20, tName) end
                 if st then st.alive = false; st.hp = 0 end
+            elseif st and st.hp <= 0 and st.alive then
+                -- 兜底: killed 数组缺失时按 hp 判定死亡
+                st.alive = false; st.hp = 0
             end
 
             -- 同步目标士气
