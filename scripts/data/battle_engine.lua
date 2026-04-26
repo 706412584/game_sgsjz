@@ -73,6 +73,38 @@ M.TARGET = TARGET
 M.EFFECT = EFFECT
 
 ------------------------------------------------------------
+-- rowIdx 分配: 与 battle_field.lua 的 assignRows 一致
+-- 用于纵排(LINE)攻击按列命中
+------------------------------------------------------------
+local function assignRowIndices(count)
+    if count <= 0 then return {} end
+    if count == 1 then return { 2 } end
+    if count == 2 then return { 1, 3 } end
+    return { 1, 2, 3 }
+end
+
+--- 为一组单元分配 rowIdx (按 front/back 分组各自分配)
+---@param units BattleUnit[]
+local function assignRowIdx(units)
+    local front, back = {}, {}
+    for _, u in ipairs(units) do
+        if u.row == "front" then
+            front[#front + 1] = u
+        else
+            back[#back + 1] = u
+        end
+    end
+    local fIdx = assignRowIndices(#front)
+    for i, u in ipairs(front) do
+        u.rowIdx = fIdx[i]
+    end
+    local bIdx = assignRowIndices(#back)
+    for i, u in ipairs(back) do
+        u.rowIdx = bIdx[i]
+    end
+end
+
+------------------------------------------------------------
 -- 技能数据库: 解析 heroData.skillDesc 生成结构化技能
 -- 简化版: 为每个英雄预定义技能参数
 ------------------------------------------------------------
@@ -320,6 +352,7 @@ end
 ---@field morale number
 ---@field level number
 ---@field statuses table<string, {dur:number, value:number}>
+---@field rowIdx number 1|2|3 纵排位置索引
 ---@field alive boolean
 ---@field totalDamage number
 ---@field totalHeal number
@@ -649,21 +682,16 @@ local function selectTargets(attacker, allUnits, targetType)
         local back = getAliveUnits(allUnits, enemySide, "back")
         return #back > 0 and back or enemies
     elseif targetType == TARGET.LINE then
-        -- 纵排: 从前排+后排中随机选3个不重复目标
-        local pool = {}
-        local front = getAliveUnits(allUnits, enemySide, "front")
-        local back  = getAliveUnits(allUnits, enemySide, "back")
-        for _, u in ipairs(front) do pool[#pool + 1] = u end
-        for _, u in ipairs(back)  do pool[#pool + 1] = u end
+        -- 纵排: 随机选一个敌人，命中同一 rowIdx 的所有前后排敌人
+        local primary = enemies[math.random(#enemies)]
+        local targetRowIdx = primary.rowIdx or 2
         local targets = {}
-        for _ = 1, math.min(3, #pool) do
-            local idx = math.random(#pool)
-            targets[#targets + 1] = pool[idx]
-            table.remove(pool, idx)
+        for _, e in ipairs(enemies) do
+            if e.rowIdx == targetRowIdx then
+                targets[#targets + 1] = e
+            end
         end
-        if #targets == 0 and #enemies > 0 then
-            targets = { enemies[math.random(#enemies)] }
-        end
+        if #targets == 0 then targets = { primary } end
         return targets
     elseif targetType == TARGET.RANDOM3 then
         local targets = {}
@@ -1310,6 +1338,7 @@ function M.BuildAllyTeam(gameState)
         end
     end
 
+    assignRowIdx(units)
     return units
 end
 
@@ -1359,6 +1388,7 @@ function M.BuildEnemyTeam(mapId, nodeIdx, nodeType)
         units[#units + 1] = M.CreateSoldierUnit(soldiers[((guardIdx + 3) % #soldiers) + 1], mapId, "enemy", "back", basePower * 0.5)
     end
 
+    assignRowIdx(units)
     return units
 end
 
@@ -1375,6 +1405,7 @@ function M.BuildDefaultEnemyTeam(mapId, nodeType)
         local p = power * (i == 1 and 1.0 or (0.9 - i * 0.05))
         units[#units + 1] = M.CreateSoldierUnit(names[i], mapId, "enemy", row, p)
     end
+    assignRowIdx(units)
     return units
 end
 
