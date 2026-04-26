@@ -274,25 +274,23 @@ function M.Show(heroId, heroState, fullState)
 
             -- 2b. 衍生战斗属性（仅已拥有时显示，按兵种类型过滤）
             if derived then
-                -- 按兵种类型决定显示哪些攻防属性
-                -- 步兵: 普攻/普防
-                -- 骑兵/弓兵/机械: 普攻/普防 + 战攻/战防
-                -- 法术/辅助: 普攻/普防 + 策攻/策防
-                local showSkill = (heroCat == "cavalry" or heroCat == "archer" or heroCat == "siege")
-                local showMagic = (heroCat == "magic" or heroCat == "support")
+                -- 按兵种类型过滤攻击属性，防御始终全部显示
+                local showSkillAtk = (heroCat == "cavalry" or heroCat == "archer" or heroCat == "siege")
+                local showMagicAtk = (heroCat == "magic" or heroCat == "support")
 
                 local badges = {
                     statBadge("普攻", derived.atkNormal, C.faction_wei),
-                    statBadge("普防", math.floor(derived.defNormal * 1000), C.faction_wei),
                 }
-                if showSkill then
+                if showSkillAtk then
                     badges[#badges + 1] = statBadge("战攻", derived.atkSkill, C.red)
-                    badges[#badges + 1] = statBadge("战防", math.floor(derived.defSkill * 1000), C.red)
                 end
-                if showMagic then
+                if showMagicAtk then
                     badges[#badges + 1] = statBadge("策攻", derived.atkMagic, C.mp)
-                    badges[#badges + 1] = statBadge("策防", math.floor(derived.defMagic * 1000), C.mp)
                 end
+                -- 防御始终全部显示
+                badges[#badges + 1] = statBadge("普防", math.floor(derived.defNormal * 1000), C.faction_wei)
+                badges[#badges + 1] = statBadge("战防", math.floor(derived.defSkill * 1000), C.red)
+                badges[#badges + 1] = statBadge("策防", math.floor(derived.defMagic * 1000), C.mp)
                 -- 通用属性始终显示
                 badges[#badges + 1] = statBadge("暴击", fmtPct(derived.critRate), C.gold)
                 badges[#badges + 1] = statBadge("闪避", fmtPct(derived.dodgeRate), C.jade)
