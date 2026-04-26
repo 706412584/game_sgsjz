@@ -718,10 +718,38 @@ function M.Create(gameState, callbacks)
         width = "100%", padding = 6, gap = 2, alignItems = "center",
         backgroundColor = { C.panel[1], C.panel[2], C.panel[3], 200 }, borderRadius = 8,
         children = {
+            -- 标题行: 阵容编辑 + 清空/保存按钮
             UI.Panel { width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center", marginBottom = 2,
                 children = {
-                    UI.Label { text = "阵容编辑", fontSize = Theme.fontSize.title, fontColor = C.gold, fontWeight = "bold" },
-                    powerLabel_,
+                    UI.Panel { flexDirection = "column", gap = 1,
+                        children = {
+                            UI.Label { text = "阵容编辑", fontSize = Theme.fontSize.title, fontColor = C.gold, fontWeight = "bold" },
+                            powerLabel_,
+                        },
+                    },
+                    UI.Panel { flexDirection = "row", gap = 6, alignItems = "center",
+                        children = {
+                            Comp.SanButton({ text = "清空", variant = "secondary", width = 56, height = 26, fontSize = 10,
+                                onClick = function()
+                                    Modal.Confirm("确认", "确定清空当前阵容？", function()
+                                        editFront_, editMid_, editBack_ = {}, {}, {}
+                                        refreshSlots()
+                                    end)
+                                end,
+                            }),
+                            Comp.SanButton({ text = "保存", variant = "primary", width = 56, height = 26, fontSize = 10,
+                                onClick = function()
+                                    local total = countSlots(editFront_, FRONT_MAX) + countSlots(editMid_, MID_MAX) + countSlots(editBack_, BACK_MAX)
+                                    if total == 0 then Modal.Alert("提示", "阵容至少需要1名武将！"); return end
+                                    saveLineup()
+                                    local fName = DF.Get(editFormation_)
+                                    fName = fName and fName.name or editFormation_
+                                    Modal.Alert("保存成功", "阵容已更新！共"..total.."名武将\n阵法: "..fName)
+                                    if callbacks_.onSave then callbacks_.onSave() end
+                                end,
+                            }),
+                        },
+                    },
                 },
             },
             formationSelector,
@@ -732,33 +760,6 @@ function M.Create(gameState, callbacks)
             UI.Panel { flexDirection = "row", justifyContent = "center", gap = 8, children = midSlots },
             UI.Label { text = "后排 (输出/辅助)", fontSize = Theme.fontSize.caption, fontColor = C.textDim, marginTop = 2, marginBottom = 1 },
             UI.Panel { flexDirection = "row", justifyContent = "center", gap = 8, children = backSlots },
-            UI.Panel { height = 4 }, -- 底部留白
-        },
-    }
-
-    -- 按钮行
-    local buttonRow = UI.Panel {
-        width = "100%", flexDirection = "row", justifyContent = "center", gap = 12, paddingVertical = 6,
-        children = {
-            Comp.SanButton({ text = "清空阵容", variant = "secondary", width = 100, height = S.btnSmHeight, fontSize = S.btnSmFontSize,
-                onClick = function()
-                    Modal.Confirm("确认", "确定清空当前阵容？", function()
-                        editFront_, editMid_, editBack_ = {}, {}, {}
-                        refreshSlots()
-                    end)
-                end,
-            }),
-            Comp.SanButton({ text = "保存阵容", variant = "primary", width = 140, height = S.btnSmHeight, fontSize = S.btnSmFontSize,
-                onClick = function()
-                    local total = countSlots(editFront_, FRONT_MAX) + countSlots(editMid_, MID_MAX) + countSlots(editBack_, BACK_MAX)
-                    if total == 0 then Modal.Alert("提示", "阵容至少需要1名武将！"); return end
-                    saveLineup()
-                    local fName = DF.Get(editFormation_)
-                    fName = fName and fName.name or editFormation_
-                    Modal.Alert("保存成功", "阵容已更新！共"..total.."名武将\n阵法: "..fName)
-                    if callbacks_.onSave then callbacks_.onSave() end
-                end,
-            }),
         },
     }
 
@@ -768,11 +769,10 @@ function M.Create(gameState, callbacks)
 
     local leftPanel = UI.Panel {
         width = "45%", flexShrink = 0,
-        padding = 4, gap = 4,
+        padding = 4,
         flexDirection = "column",
     }
     leftPanel:AddChild(formationPanel)
-    leftPanel:AddChild(buttonRow)
 
     pagePanel_ = UI.Panel {
         width = "100%", flexGrow = 1, flexBasis = 0, flexDirection = "row", backgroundColor = C.bg,
