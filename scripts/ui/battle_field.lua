@@ -99,15 +99,22 @@ local function createCard(unit, side, colKey, rowIdx)
         transition      = "value 0.3s easeOut",
     }
 
-    local moraleBar = UI.ProgressBar {
-        value           = (unit.morale or 0) / 100,
-        width           = avatarSize_,
-        height          = morH,
-        backgroundColor = { 20, 20, 20, 200 },
-        borderRadius    = 1,
-        fillColor       = C.morale,
-        transition      = "value 0.3s easeOut",
-    }
+    -- 只有战法将(步兵/骑兵/弓兵)显示气力值黄条
+    local isSkillHero = unit.troopCat == "infantry"
+                     or unit.troopCat == "cavalry"
+                     or unit.troopCat == "archer"
+    local moraleBar = nil
+    if isSkillHero then
+        moraleBar = UI.ProgressBar {
+            value           = (unit.morale or 0) / 100,
+            width           = avatarSize_,
+            height          = morH,
+            backgroundColor = { 20, 20, 20, 200 },
+            borderRadius    = 1,
+            fillColor       = C.morale,
+            transition      = "value 0.3s easeOut",
+        }
+    end
 
     local statusLabel = UI.Label {
         text      = "",
@@ -154,19 +161,17 @@ local function createCard(unit, side, colKey, rowIdx)
     }
 
     -- 普通 flex 子元素, 不用 absolute
+    local cardChildren = { avatar, nameLabel, hpBar }
+    if moraleBar then cardChildren[#cardChildren + 1] = moraleBar end
+    cardChildren[#cardChildren + 1] = statusLabel
+
     local card = UI.Panel {
         width      = cardW_,
         height     = cardH_,
         alignItems = "center",
         gap        = 1,
         transition = "opacity 0.3s easeOut",
-        children   = {
-            avatar,
-            nameLabel,
-            hpBar,
-            moraleBar,
-            statusLabel,
-        },
+        children   = cardChildren,
     }
 
     unitCards_[unit.id] = {
