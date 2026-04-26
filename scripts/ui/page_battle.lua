@@ -10,6 +10,7 @@ local Modal  = require("ui.modal_manager")
 local BField = require("ui.battle_field")
 local BFX    = require("ui.battle_effects")
 local DT     = require("data.data_troops")
+local BAudio = require("ui.battle_audio")
 local C      = Theme.colors
 local S      = Theme.sizes
 
@@ -86,6 +87,9 @@ local function showActionEffects(action)
     local heals   = action.heals or {}
     local isCrit  = action.isCrit or {}
     local killed  = action.killed or {}
+
+    -- 播放音效
+    BAudio.PlayActionSound(action, unitById_)
 
     local actorId = action.actorId
     if actorId then BField.HighlightUnit(actorId) end
@@ -407,6 +411,9 @@ function M.Create(log, callbacks)
         enemyTotalMaxHp_ = enemyTotalMaxHp_ + (u.maxHp or 0)
     end
 
+    -- 初始化战斗音效
+    BAudio.Init()
+
     -- 自订阅 Update
     SubscribeToEvent("Update", "HandleBattleFrameUpdate")
 
@@ -636,6 +643,7 @@ function M.Stop()
     playing_ = false
     BFX.Clear()
     BField.Clear()
+    BAudio.Clear()
 end
 
 function M.GetPanel()
