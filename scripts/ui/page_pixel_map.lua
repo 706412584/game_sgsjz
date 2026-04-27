@@ -373,8 +373,22 @@ local function generateMap()
     return map, cities, cityPosMap
 end
 
+--- 地形中文名（调试用）
+local TERRAIN_NAMES = {
+    grass    = "草地",
+    forest   = "森林",
+    water    = "水域",
+    mountain = "山脉",
+    road     = "道路",
+    city     = "城池",
+    sand     = "沙地",
+    bridge   = "桥梁",
+    farmland = "农田",
+}
+
 local container_ = nil
 local onBack_    = nil
+local debugLabel_ = nil
 
 --- 创建页面
 ---@param opts? {onBack: fun()}
@@ -423,11 +437,24 @@ function M.Create(opts)
         fontWeight = "bold",
     })
     topBar:AddChild(leftRow)
-    topBar:AddChild(UI.Label {
+    -- 右侧：调试信息 + 尺寸
+    debugLabel_ = UI.Label {
+        text      = "点击瓦片查看信息",
+        fontSize  = 11,
+        fontColor = { 120, 230, 180, 220 },
+    }
+    local rightRow = UI.Panel {
+        flexDirection = "row",
+        alignItems    = "center",
+        gap           = 16,
+    }
+    rightRow:AddChild(debugLabel_)
+    rightRow:AddChild(UI.Label {
         text      = string.format("%dx%d", MAP_COLS, MAP_ROWS),
         fontSize  = 11,
         fontColor = { 180, 160, 120, 180 },
     })
+    topBar:AddChild(rightRow)
     container_:AddChild(topBar)
 
     -- 地图滚动区域
@@ -480,6 +507,17 @@ function M.Create(opts)
 
             local bg = TERRAIN_BG[terrain] or TERRAIN_BG.grass
 
+            -- 瓦片点击回调（调试：显示行列+地形）
+            local tileR, tileC, tileTerrain = r, c, terrain
+            local tileClick = function()
+                local name = TERRAIN_NAMES[tileTerrain] or tileTerrain
+                local info = string.format("瓦片[%d,%d] %s", tileR, tileC, name)
+                log:Write(LOG_INFO, "[MAP] 点击 " .. info)
+                if debugLabel_ then
+                    debugLabel_:SetText(info)
+                end
+            end
+
             local tilePanel
             if cityName then
                 -- 城池：贴图 + 名称标签 + 边框
@@ -497,12 +535,14 @@ function M.Create(opts)
                     borderRadius    = 4,
                     borderWidth     = 2,
                     borderColor     = { 180, 140, 40, 255 },
+                    onClick         = tileClick,
                 }
                 tilePanel:AddChild(UI.Label {
                     text       = cityName,
                     fontSize   = 8,
                     fontColor  = { 255, 240, 180, 255 },
                     fontWeight = "bold",
+                    pointerEvents = "none",
                 })
             else
                 -- 普通地形：底色 + 切片贴图
@@ -515,6 +555,7 @@ function M.Create(opts)
                     backgroundColor = bg,
                     backgroundImage = tilePath,
                     backgroundFit   = "cover",
+                    onClick         = tileClick,
                 }
             end
 
