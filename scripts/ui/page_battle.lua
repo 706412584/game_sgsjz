@@ -134,6 +134,12 @@ local function showActionEffects(action)
             local dmg = damages[i] or 0
             if dmg > 0 then
                 if pos then
+                    -- 命中特效 (根据攻击者兵种显示元素/物理命中)
+                    local actorUnit = actorId and unitById_[actorId]
+                    if actorUnit then
+                        BFX.ShowHitEffect(pos.x, pos.y,
+                            actorUnit.troopKey, actorUnit.troopCat)
+                    end
                     local ox = math.random(-15, 15)
                     local oy = math.random(-10, 5)
                     BFX.ShowDamage(pos.x + ox, pos.y + oy, dmg, isCrit[i])

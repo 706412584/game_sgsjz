@@ -470,4 +470,61 @@ function M.Clear()
     effects_ = {}
 end
 
+------------------------------------------------------------
+-- 攻击命中特效 (元素/物理)
+------------------------------------------------------------
+local HIT_FX_MAP = {
+    fire_strategist     = "Textures/effects/fx_hit_fire.png",
+    fire_god            = "Textures/effects/fx_hit_fire.png",
+    water_strategist    = "Textures/effects/fx_hit_water.png",
+    flood_strategist    = "Textures/effects/fx_hit_water.png",
+    thunder_mage        = "Textures/effects/fx_hit_thunder.png",
+    thunder_god         = "Textures/effects/fx_hit_thunder.png",
+    thorn_mage          = "Textures/effects/fx_hit_thorn.png",
+    sun_mage            = "Textures/effects/fx_hit_sun.png",
+    rockfall_strategist = "Textures/effects/fx_hit_rockfall.png",
+}
+local PHYSICAL_HIT_FX = "Textures/effects/fx_hit_physical.png"
+
+--- 显示攻击命中特效
+---@param x number 目标屏幕X
+---@param y number 目标屏幕Y
+---@param troopKey string|nil 攻击者兵种key
+---@param troopCat string|nil 攻击者兵种分类
+function M.ShowHitEffect(x, y, troopKey, troopCat)
+    if not container_ then return end
+    if troopCat == "support" then return end
+
+    local fxImage = (troopKey and HIT_FX_MAP[troopKey]) or PHYSICAL_HIT_FX
+    local isElement = (troopKey and HIT_FX_MAP[troopKey]) ~= nil
+    local fxSize = isElement and 100 or 64
+
+    local panel = UI.Panel {
+        position        = "absolute",
+        left            = math.floor(x - fxSize / 2),
+        top             = math.floor(y - fxSize / 2 - 15),
+        width           = fxSize,
+        height          = fxSize,
+        backgroundImage = fxImage,
+        backgroundFit   = "contain",
+        pointerEvents   = "none",
+    }
+    container_:AddChild(panel)
+
+    panel:Animate({
+        keyframes = {
+            [0]    = { scale = 0.3, opacity = 0 },
+            [0.15] = { scale = 1.2, opacity = 1 },
+            [0.3]  = { scale = 1.0, opacity = 0.9 },
+            [0.7]  = { scale = 0.9, opacity = 0.4 },
+            [1]    = { scale = 0.6, opacity = 0 },
+        },
+        duration = 0.6,
+        easing   = "easeOut",
+        fillMode = "forwards",
+    })
+
+    registerFx(panel, 0.6)
+end
+
 return M
