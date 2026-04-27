@@ -10,6 +10,7 @@ local DF = require("data.data_formation")
 local TS = require("data.treasure_state")
 local DT = require("data.data_troops")
 local DE = require("data.data_equip")
+local DS = require("data.data_skills")
 
 local M = {}
 
@@ -153,243 +154,70 @@ end
 ------------------------------------------------------------
 local SKILL_DB = {}
 
---- 根据 skillDesc 文本解析技能参数(启发式)
+--- 从结构化数据构建技能参数(取代正则解析)
 ---@param heroId string
 ---@param heroData HeroData
 ---@return table
 local function parseSkillFromDesc(heroId, heroData)
-    local desc = heroData.skillDesc or ""
     local skill = {
-        name     = heroData.skill or "普通攻击",
-        heroId   = heroId,
-        effects  = {},
+        name    = heroData.skill or "普通攻击",
+        heroId  = heroId,
+        effects = {},
+        extras  = {},
     }
 
-    -- 解析伤害倍率: "造成XXX%伤害" 或 "造成XXX%法伤"
-    local dmgPct = desc:match("造成(%d+)%%[法]?伤")
-    local isMagic = desc:find("法伤") ~= nil
-
-    -- 解析治疗: "治疗XXX%兵力" 或 "群疗XXX%兵力"
-    local healPct = desc:match("[治群]疗[%a]*(%d+)%%兵力")
-
-    -- 解析护盾: "护盾XXX%兵力" 或 "护盾XXX%"
-    local shieldPct = desc:match("护盾(%d+)%%")
-
-    -- 解析目标类型(从最具体到最宽泛匹配)
-    local targetType = TARGET.SINGLE
-    if desc:find("前排全体") then
-        targetType = TARGET.FRONT
-    elseif desc:find("后排全体") then
-        targetType = TARGET.BACK
-    elseif desc:find("横排全体") or desc:find("横排") then
-        targetType = TARGET.ROW
-    elseif desc:find("前排单体") or desc:find("前排") then
-        targetType = TARGET.FRONT_SINGLE
-    elseif desc:find("后排单体") or desc:find("后排") then
-        targetType = TARGET.BACK_SINGLE
-    elseif desc:find("纵排") then
-        targetType = TARGET.LINE
-    elseif desc:find("全体") or desc:find("群疗全体") or desc:find("全队") then
-        targetType = TARGET.ALL
-    elseif desc:find("随机3") or desc:find("随机三") then
-        targetType = TARGET.RANDOM3
-    elseif desc:find("随机2") or desc:find("2个目标") or desc:find("双目标") then
-        targetType = TARGET.DOUBLE
-    elseif desc:find("最高血量") then
-        targetType = TARGET.HIGHEST_HP
-    elseif desc:find("最低血量") then
-        targetType = TARGET.LOWEST_HP
-    end
-
-    -- 治疗技能指向友方
-    if healPct and not dmgPct then
-        targetType = TARGET.ALLY_ALL
-    end
-
-    -- 构建主效果
-    if healPct then
-        skill.effects[#skill.effects + 1] = {
-            type       = EFFECT.HEAL,
-            target     = targetType,
-            pct        = tonumber(healPct) / 100,
-        }
-    end
-    if dmgPct then
-        skill.effects[#skill.effects + 1] = {
-            type       = isMagic and EFFECT.MAGIC or EFFECT.DAMAGE,
-            target     = targetType,
-            multiplier = tonumber(dmgPct) / 100,
-        }
-    end
-    if shieldPct then
-        skill.effects[#skill.effects + 1] = {
-            type       = EFFECT.SHIELD,
-            target     = TARGET.ALLY_ALL,
-            pct        = tonumber(shieldPct) / 100,
-        }
-    end
-
-    -- 如果没有伤害也没有治疗, 作为 buff 技能
-    if #skill.effects == 0 then
-        -- 检查是否增伤/增属性 buff
-        if desc:find("增伤") or desc:find("增攻") or desc:find("攻击%+") then
-            skill.effects[#skill.effects + 1] = {
-                type   = EFFECT.BUFF,
-                target = TARGET.ALLY_ALL,
-                buff   = STATUS.ATK_UP,
-                dur    = 2,
-            }
-        else
-            -- 默认作为单体伤害
-            skill.effects[#skill.effects + 1] = {
-                type       = EFFECT.DAMAGE,
-                target     = TARGET.SINGLE,
-                multiplier = 1.8,
-            }
+    local sd = DS.SKILL_DATA[heroId]
+    if sd then
+        -- 主效果列表: 深拷贝避免缓存间污染
+        if sd.effects then
+            for i, e in ipairs(sd.effects) do
+                skill.effects[i] = {
+                    type       = e.type,
+                    target     = e.target,
+                    multiplier = e.multiplier,
+                    pct        = e.pct,
+                    buff       = e.buff,
+                    dur        = e.dur,
+                }
+            end
         end
-    end
 
-    -- 解析附加状态效果: "XX%附/附加/概率 状态 N回合"
-    local statusParsers = {
-        { pattern = "(%d+)%%[附概率]*破甲", status = STATUS.ARMOR_BREAK },
-        { pattern = "(%d+)%%[附概率]*眩晕", status = STATUS.STUN },
-        { pattern = "(%d+)%%[附概率]*沉默", status = STATUS.SILENCE },
-        { pattern = "(%d+)%%[附概率]*灼烧", status = STATUS.BURN },
-        { pattern = "(%d+)%%[附概率]*混乱", status = STATUS.CHARM },
-        { pattern = "(%d+)%%[附概率]*魅惑", status = STATUS.CHARM },
-        { pattern = "(%d+)%%[附概率]*冰冻", status = STATUS.FREEZE },
-        { pattern = "(%d+)%%[附概率]*控制", status = STATUS.STUN },
-        { pattern = "附灼烧",               status = STATUS.BURN, fixedRate = 100 },
-        { pattern = "附持续回血",            status = STATUS.HOT, fixedRate = 100, isAlly = true },
-    }
-    for _, sp in ipairs(statusParsers) do
-        local rate = sp.fixedRate
-        if not rate then
-            local pct = desc:match(sp.pattern)
-            if pct then rate = tonumber(pct) end
-        else
-            if not desc:find(sp.pattern) then rate = nil end
-        end
-        if rate then
-            local dur = desc:match("(%d+)回合") or 2
+        -- 技能命中附加状态
+        if sd.statusEffect then
+            local se = sd.statusEffect
             skill.statusEffect = {
-                status = sp.status,
-                rate   = rate / 100,
-                dur    = tonumber(dur),
-                isAlly = sp.isAlly or false,
+                status = se.status,
+                rate   = se.rate,
+                dur    = se.dur,
+                isAlly = se.isAlly or false,
             }
-            break
         end
-    end
 
-    -- ============================================================
-    -- 扩展: 解析高级战斗机制 (被动/条件触发)
-    -- ============================================================
-    skill.extras = {}
+        -- 高级战斗机制(extras): 浅拷贝
+        if sd.extras then
+            for k, v in pairs(sd.extras) do
+                skill.extras[k] = v
+            end
+        end
 
-    -- 吸血: "吸血XX%"
-    local lifestealPct = desc:match("吸血(%d+)%%")
-    if lifestealPct then
-        skill.extras.lifesteal = tonumber(lifestealPct) / 100
-    end
-
-    -- 追击: "击杀后追击一次" / "击杀回怒XX"
-    if desc:find("击杀后追击") or desc:find("追击一次") then
-        skill.extras.pursuitOnKill = true
-    end
-    local killMorale = desc:match("击杀回怒(%d+)")
-    if killMorale then
-        skill.extras.killMoraleBonus = tonumber(killMorale)
-    end
-
-    -- 反击: "被攻击时反击XX%" 或 "XX%概率反击"
-    local counterPct = desc:match("反击(%d+)%%") or desc:match("(%d+)%%概率反击")
-    if counterPct then
-        skill.extras.counterRate = tonumber(counterPct) / 100
-    end
-
-    -- 免死: "免死1次" / "被击杀免死"
-    if desc:find("免死") then
-        skill.extras.deathImmune = true
-    end
-    -- 免控: "免控X回合"
-    local immuneCtrl = desc:match("免控(%d+)回合")
-    if immuneCtrl then
-        skill.extras.immuneControl = tonumber(immuneCtrl)
-    end
-
-    -- 斩杀: "半血以下.*斩杀率+XX%"
-    local executePct = desc:match("斩杀率%+(%d+)%%")
-    if executePct then
-        skill.extras.executeThreshold = 0.5
-        skill.extras.executeRate = tonumber(executePct) / 100
-    end
-
-    -- 无视防御: "无视XX%防御"
-    local ignoreDef = desc:match("无视(%d+)%%防御")
-    if ignoreDef then
-        skill.extras.ignoreDefense = tonumber(ignoreDef) / 100
-    end
-
-    -- 自回血: "自回血XX%"
-    local selfHealPct = desc:match("自回血(%d+)%%")
-    if selfHealPct then
-        skill.extras.selfHealPerTurn = tonumber(selfHealPct) / 100
-    end
-
-    -- 增怒: "增怒XX点" / "回怒XX"
-    local addMorale = desc:match("增怒(%d+)") or desc:match("回怒(%d+)")
-    if addMorale then
-        skill.extras.allyMoraleBoost = tonumber(addMorale)
-    end
-
-    -- 减怒: "减怒XX"
-    local reduceMorale = desc:match("减怒(%d+)")
-    if reduceMorale then
-        skill.extras.enemyMoraleReduce = tonumber(reduceMorale)
-    end
-
-    -- 降智: "降智XX%持续N回合"
-    local reduceZhi = desc:match("降智(%d+)%%")
-    if reduceZhi then
-        skill.extras.debuffZhi = tonumber(reduceZhi) / 100
-    end
-
-    -- 增暴击: "暴击率+XX%" / "暴击+XX%"
-    local critBonus = desc:match("暴击率%+(%d+)%%") or desc:match("暴击%+(%d+)%%")
-    if critBonus then
-        skill.extras.critBonus = tonumber(critBonus) / 100
-    end
-
-    -- 破盾追击: "破盾后追击"
-    if desc:find("破盾后追击") or desc:find("破盾追击") then
-        skill.extras.pursuitOnShieldBreak = true
-    end
-
-    -- ============================================================
-    -- 解析被动描述(passiveDesc) 中的"攻击附加状态"效果
-    -- 如 "攻击35%概率眩晕敌人" / "法伤40%概率沉默敌人"
-    -- ============================================================
-    local pDesc = heroData.passiveDesc or ""
-    local passiveStatusParsers = {
-        { pattern = "(%d+)%%概率眩晕",  status = STATUS.STUN },
-        { pattern = "(%d+)%%概率沉默",  status = STATUS.SILENCE },
-        { pattern = "(%d+)%%概率魅惑",  status = STATUS.CHARM },
-        { pattern = "(%d+)%%概率混乱",  status = STATUS.CHARM },
-        { pattern = "(%d+)%%概率控制",  status = STATUS.STUN },
-        { pattern = "(%d+)%%概率冰冻",  status = STATUS.FREEZE },
-        { pattern = "(%d+)%%[附概率]*破甲", status = STATUS.ARMOR_BREAK },
-    }
-    for _, sp in ipairs(passiveStatusParsers) do
-        local pct = pDesc:match(sp.pattern)
-        if pct then
+        -- 普攻被动附加状态
+        if sd.passiveStatusEffect then
+            local ps = sd.passiveStatusEffect
             skill.passiveStatusEffect = {
-                status = sp.status,
-                rate   = tonumber(pct) / 100,
-                dur    = 1,
+                status = ps.status,
+                rate   = ps.rate,
+                dur    = ps.dur,
             }
-            break
         end
+    end
+
+    -- 兜底: 无主效果时默认单体物伤
+    if #skill.effects == 0 and heroData.skill ~= "无" then
+        skill.effects[1] = {
+            type       = EFFECT.DAMAGE,
+            target     = TARGET.SINGLE,
+            multiplier = 1.8,
+        }
     end
 
     return skill
@@ -1472,6 +1300,17 @@ local function executeAction(actor, allUnits)
                             dur    = ps.dur,
                         }
                     end
+                end
+
+                -- 被动普攻护盾: 攻击后获得自身X%护盾(如赵云)
+                if extras.atkSelfShield then
+                    local shieldVal = math.floor(actor.maxHp * extras.atkSelfShield)
+                    tryApplyStatus(actor, STATUS.SHIELD, 2, 1.0, shieldVal)
+                    action.statuses[#action.statuses + 1] = {
+                        target = actor.name,
+                        status = "shield",
+                        value  = shieldVal,
+                    }
                 end
             end
         end
