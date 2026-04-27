@@ -1,5 +1,5 @@
 -- ui/page_pixel_map.lua — 像素地图测试页面
--- 纯色色块绘制，无需外部贴图
+-- 使用 sprite_forge 切割的 tileset 瓦片贴图渲染
 local UI = require("urhox-libs/UI")
 local Comp = require("ui.components")
 
@@ -10,49 +10,66 @@ local TILE_PX    = 36                  -- 每格显示像素
 local MAP_COLS   = 36                  -- 地图列数
 local MAP_ROWS   = 18                  -- 地图行数
 
--- 地形颜色（RGBA）— 每种地形有 2-3 个色阶随机选用，增加层次感
-local TERRAIN_COLORS = {
+------------------------------------------------------------------------
+-- 地形 → tileset 瓦片映射（sprite_forge 分析 + 目视识别）
+-- 瓦片来源: spr_sanguo_map_tileset (16x16 grid)
+-- 切片路径: Textures/tiles/tile_RR_CC.png (RR=行, CC=列)
+------------------------------------------------------------------------
+local TERRAIN_TILES = {
     grass = {
-        { 92, 168, 64, 255 },
-        { 80, 152, 56, 255 },
-        { 100, 180, 72, 255 },
+        "Textures/tiles/tile_00_00.png",   -- 纯绿草地
+        "Textures/tiles/tile_00_05.png",   -- 纯绿草地变体
+        "Textures/tiles/tile_00_10.png",   -- 纯绿草地变体
     },
     forest = {
-        { 34, 110, 38, 255 },
-        { 28, 96, 32, 255 },
-        { 40, 120, 44, 255 },
+        "Textures/tiles/tile_03_05.png",   -- 树木（深绿树冠）
+        "Textures/tiles/tile_03_15.png",   -- 树木变体
+        "Textures/tiles/tile_03_10.png",   -- 树木变体
     },
     water = {
-        { 52, 108, 200, 255 },
-        { 44, 96, 186, 255 },
-        { 60, 120, 210, 255 },
+        "Textures/tiles/tile_07_15.png",   -- 纯蓝水面
+        "Textures/tiles/tile_08_15.png",   -- 纯蓝水面变体
     },
     mountain = {
-        { 148, 128, 96, 255 },
-        { 132, 112, 84, 255 },
-        { 160, 140, 108, 255 },
+        "Textures/tiles/tile_05_04.png",   -- 棕色岩石山地
+        "Textures/tiles/tile_05_05.png",   -- 棕色岩石山地变体
     },
     road = {
-        { 188, 168, 112, 255 },
-        { 176, 156, 100, 255 },
+        "Textures/tiles/tile_12_05.png",   -- 棕色道路
     },
     city = {
-        { 228, 188, 64, 255 },
-        { 240, 200, 80, 255 },
+        "Textures/tiles/tile_10_05.png",   -- 灰色城墙/城垛
+        "Textures/tiles/tile_10_13.png",   -- 城墙变体
     },
     sand = {
-        { 208, 192, 136, 255 },
-        { 196, 180, 124, 255 },
-        { 216, 200, 148, 255 },
+        "Textures/tiles/tile_15_05.png",   -- 黄色沙地
+        "Textures/tiles/tile_15_10.png",   -- 沙地变体
     },
     bridge = {
-        { 160, 130, 80, 255 },
+        "Textures/tiles/tile_06_08.png",   -- 桥梁（棕色横跨蓝色）
+    },
+    farmland = {
+        "Textures/tiles/tile_13_05.png",   -- 农田（绿色网格）
+        "Textures/tiles/tile_13_10.png",   -- 农田变体
     },
 }
 
---- 从色阶列表中随机选一个颜色
-local function randomColor(terrainType)
-    local list = TERRAIN_COLORS[terrainType] or TERRAIN_COLORS.grass
+--- 图例用的代表色（仅用于底部图例色块显示）
+local LEGEND_COLORS = {
+    grass    = { 92, 168, 64 },
+    forest   = { 34, 110, 38 },
+    water    = { 52, 108, 200 },
+    mountain = { 148, 128, 96 },
+    road     = { 188, 168, 112 },
+    city     = { 228, 188, 64 },
+    sand     = { 208, 192, 136 },
+    bridge   = { 160, 130, 80 },
+    farmland = { 100, 160, 60 },
+}
+
+--- 从瓦片列表中随机选一个贴图路径
+local function randomTile(terrainType)
+    local list = TERRAIN_TILES[terrainType] or TERRAIN_TILES.grass
     return list[math.random(1, #list)]
 end
 
@@ -119,7 +136,16 @@ local function generateMap()
         end
     end
 
-    -- 6) 主干道：横向穿过第 6 行
+    -- 6) 农田（散布在草地上，河流南岸附近）
+    for c = 1, MAP_COLS do
+        for r = 12, 14 do
+            if map[r][c] == "grass" and math.random(100) < 18 then
+                map[r][c] = "farmland"
+            end
+        end
+    end
+
+    -- 7) 主干道：横向穿过第 6 行
     for c = 1, MAP_COLS do
         local rr = 6 + math.floor(math.sin(c * 0.25) * 0.8 + 0.5)
         if rr >= 1 and rr <= MAP_ROWS and map[rr][c] == "grass" then
@@ -134,11 +160,10 @@ local function generateMap()
         end
     end
 
-    -- 7) 桥梁：道路穿过河流的位置
+    -- 8) 桥梁：道路穿过河流的位置
     for r = 1, MAP_ROWS do
         for c = 1, MAP_COLS do
             if map[r][c] == "water" then
-                -- 检查上下或左右是否有道路
                 local hasRoadNeighbor = false
                 if r > 1 and map[r - 1][c] == "road" then hasRoadNeighbor = true end
                 if r < MAP_ROWS and map[r + 1][c] == "road" then hasRoadNeighbor = true end
@@ -151,7 +176,7 @@ local function generateMap()
         end
     end
 
-    -- 8) 森林散布（只覆盖草地）
+    -- 9) 森林散布（只覆盖草地）
     for r = 1, MAP_ROWS do
         for c = 1, MAP_COLS do
             if map[r][c] == "grass" and math.random(100) < 22 then
@@ -160,7 +185,7 @@ local function generateMap()
         end
     end
 
-    -- 9) 城池放置（三国经典城市布局）
+    -- 10) 城池放置（三国经典城市布局）
     local cities = {
         { r = 3,  c = 8,  name = "邺城" },
         { r = 4,  c = 28, name = "许昌" },
@@ -248,7 +273,7 @@ function M.Create(opts)
         paddingBottom  = 8,
     }
 
-    -- 地图网格面板（用 flexWrap 排列色块）
+    -- 地图网格面板（用 flexWrap 排列瓦片）
     local mapPanel = UI.Panel {
         width         = MAP_COLS * TILE_PX,
         height        = MAP_ROWS * TILE_PX,
@@ -262,25 +287,21 @@ function M.Create(opts)
         cityLookup[ct.r .. "_" .. ct.c] = ct.name
     end
 
-    -- 填充色块
+    -- 填充瓦片贴图
     for r = 1, MAP_ROWS do
         for c = 1, MAP_COLS do
             local terrain = mapData[r][c]
-            local color = randomColor(terrain)
-
-            local tilePanel = UI.Panel {
-                width           = TILE_PX,
-                height          = TILE_PX,
-                backgroundColor = color,
-            }
-
-            -- 城池显示名称
+            local tilePath = randomTile(terrain)
             local cityName = cityLookup[r .. "_" .. c]
+
+            local tilePanel
             if cityName then
+                -- 城池：贴图 + 名称标签 + 边框
                 tilePanel = UI.Panel {
                     width           = TILE_PX,
                     height          = TILE_PX,
-                    backgroundColor = color,
+                    backgroundImage = tilePath,
+                    backgroundFit   = "cover",
                     alignItems      = "center",
                     justifyContent  = "center",
                     borderRadius    = 4,
@@ -288,11 +309,19 @@ function M.Create(opts)
                     borderColor     = { 180, 140, 40, 255 },
                 }
                 tilePanel:AddChild(UI.Label {
-                    text      = cityName,
-                    fontSize  = 8,
-                    fontColor = { 60, 20, 0, 255 },
+                    text       = cityName,
+                    fontSize   = 8,
+                    fontColor  = { 255, 240, 180, 255 },
                     fontWeight = "bold",
                 })
+            else
+                -- 普通地形：贴图
+                tilePanel = UI.Panel {
+                    width           = TILE_PX,
+                    height          = TILE_PX,
+                    backgroundImage = tilePath,
+                    backgroundFit   = "cover",
+                }
             end
 
             mapPanel:AddChild(tilePanel)
@@ -309,22 +338,24 @@ function M.Create(opts)
         flexDirection   = "row",
         alignItems      = "center",
         justifyContent  = "center",
-        gap             = 20,
+        gap             = 16,
         backgroundColor = { 20, 15, 10, 220 },
         borderTop       = 1,
         borderColor     = { 120, 90, 40, 180 },
     }
     local legends = {
-        { "草地",   { 92, 168, 64 } },
-        { "森林",   { 34, 110, 38 } },
-        { "水域",   { 52, 108, 200 } },
-        { "山脉",   { 148, 128, 96 } },
-        { "道路",   { 188, 168, 112 } },
-        { "城池",   { 228, 188, 64 } },
-        { "沙地",   { 208, 192, 136 } },
-        { "桥梁",   { 160, 130, 80 } },
+        { "草地",   "grass" },
+        { "森林",   "forest" },
+        { "水域",   "water" },
+        { "山脉",   "mountain" },
+        { "道路",   "road" },
+        { "城池",   "city" },
+        { "沙地",   "sand" },
+        { "农田",   "farmland" },
+        { "桥梁",   "bridge" },
     }
     for _, lg in ipairs(legends) do
+        local clr = LEGEND_COLORS[lg[2]]
         local row = UI.Panel {
             flexDirection = "row",
             alignItems    = "center",
@@ -334,7 +365,7 @@ function M.Create(opts)
             width           = 10,
             height          = 10,
             borderRadius    = 2,
-            backgroundColor = { lg[2][1], lg[2][2], lg[2][3], 255 },
+            backgroundColor = { clr[1], clr[2], clr[3], 255 },
         })
         row:AddChild(UI.Label {
             text      = lg[1],
