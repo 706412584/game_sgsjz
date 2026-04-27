@@ -441,12 +441,11 @@ function M.Create(opts)
         paddingBottom  = 8,
     }
 
-    -- 地图网格面板（用 flexWrap 排列瓦片）
+    -- 地图网格面板（逐行嵌套，避免 flexWrap 亚像素间隙）
     local mapPanel = UI.Panel {
         width         = MAP_COLS * TILE_PX,
         height        = MAP_ROWS * TILE_PX,
-        flexWrap      = "wrap",
-        flexDirection = "row",
+        flexDirection = "column",
     }
 
     -- 城市名称查找表
@@ -455,8 +454,13 @@ function M.Create(opts)
         cityLookup[ct.r .. "_" .. ct.c] = ct.name
     end
 
-    -- 填充瓦片贴图
+    -- 填充瓦片贴图（逐行布局）
     for r = 1, MAP_ROWS do
+        local rowPanel = UI.Panel {
+            width         = MAP_COLS * TILE_PX,
+            height        = TILE_PX,
+            flexDirection = "row",
+        }
         for c = 1, MAP_COLS do
             local terrain = mapData[r][c]
             local tilePath
@@ -510,8 +514,9 @@ function M.Create(opts)
                 }
             end
 
-            mapPanel:AddChild(tilePanel)
+            rowPanel:AddChild(tilePanel)
         end
+        mapPanel:AddChild(rowPanel)
     end
 
     scrollWrap:AddChild(mapPanel)
