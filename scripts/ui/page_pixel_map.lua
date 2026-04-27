@@ -479,6 +479,18 @@ function M.Create(opts)
             local cityName = cityLookup[r .. "_" .. c]
 
             local bg = TERRAIN_BG[terrain] or TERRAIN_BG.grass
+            -- 点击回调：输出瓦片坐标和信息到 debug_log
+            local _r, _c, _terrain, _tile = r, c, terrain, tilePath
+            local _city = cityName
+            local function onTileClick()
+                local info = string.format("[Map] r=%d c=%d terrain=%s tile=%s",
+                    _r, _c, _terrain, _tile or "nil")
+                if _city then
+                    info = info .. " city=" .. _city
+                end
+                print(info)
+            end
+
             local tilePanel
             if cityName then
                 -- 城池：贴图 + 名称标签 + 边框
@@ -496,6 +508,7 @@ function M.Create(opts)
                     borderRadius    = 4,
                     borderWidth     = 2,
                     borderColor     = { 180, 140, 40, 255 },
+                    onClick         = onTileClick,
                 }
                 tilePanel:AddChild(UI.Label {
                     text       = cityName,
@@ -514,6 +527,7 @@ function M.Create(opts)
                     backgroundColor = bg,
                     backgroundImage = tilePath,
                     backgroundFit   = "cover",
+                    onClick         = onTileClick,
                 }
             end
 
