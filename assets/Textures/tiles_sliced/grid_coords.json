@@ -1,203 +1,144 @@
 {
-  "image": "spr_sanguo_map_tileset_20260427103958.png",
+  "image": "spr_sanguo_map_tileset_v3_20260427172209.png",
   "image_size": [
     256,
     256
   ],
-  "label_width": 8,
+  "label_width": 1,
   "tile_size": 24,
-  "row_separator_bands": [
-    [
-      0,
-      1
-    ],
-    [
-      24,
-      25
-    ],
-    [
-      48,
-      49
-    ],
-    [
-      73,
-      77
-    ],
-    [
-      103,
-      105
-    ],
-    [
-      134,
-      135
-    ],
-    [
-      160,
-      161
-    ],
-    [
-      182,
-      187
-    ]
-  ],
+  "row_separator_bands": [],
   "col_separator_bands": [
     [
-      8,
-      9
+      1,
+      2
     ],
     [
-      32,
-      33
-    ],
-    [
-      57,
-      58
-    ],
-    [
-      81,
-      82
-    ],
-    [
-      105,
-      106
-    ],
-    [
-      130,
-      131
-    ],
-    [
-      155,
-      156
-    ],
-    [
-      180,
-      181
-    ],
-    [
-      205,
-      206
-    ],
-    [
-      230,
-      231
+      6,
+      7
     ]
   ],
   "rows": [
     {
       "index": 0,
-      "y_start": 1,
-      "y_end": 24,
+      "y_start": 0,
+      "y_end": 23,
       "height": 23
     },
     {
       "index": 1,
-      "y_start": 25,
-      "y_end": 48,
+      "y_start": 23,
+      "y_end": 46,
       "height": 23
     },
     {
       "index": 2,
-      "y_start": 49,
-      "y_end": 73,
-      "height": 24
-    },
-    {
-      "index": 3,
-      "y_start": 77,
-      "y_end": 103,
-      "height": 26
-    },
-    {
-      "index": 4,
-      "y_start": 105,
-      "y_end": 134,
-      "height": 29
-    },
-    {
-      "index": 5,
-      "y_start": 135,
-      "y_end": 160,
-      "height": 25
-    },
-    {
-      "index": 6,
-      "y_start": 161,
-      "y_end": 182,
-      "height": 21
-    },
-    {
-      "index": 7,
-      "y_start": 187,
-      "y_end": 210,
+      "y_start": 46,
+      "y_end": 69,
       "height": 23
     },
     {
+      "index": 3,
+      "y_start": 69,
+      "y_end": 93,
+      "height": 24
+    },
+    {
+      "index": 4,
+      "y_start": 93,
+      "y_end": 116,
+      "height": 23
+    },
+    {
+      "index": 5,
+      "y_start": 116,
+      "y_end": 139,
+      "height": 23
+    },
+    {
+      "index": 6,
+      "y_start": 139,
+      "y_end": 162,
+      "height": 23
+    },
+    {
+      "index": 7,
+      "y_start": 162,
+      "y_end": 186,
+      "height": 24
+    },
+    {
       "index": 8,
-      "y_start": 210,
-      "y_end": 233,
+      "y_start": 186,
+      "y_end": 209,
       "height": 23
     },
     {
       "index": 9,
-      "y_start": 233,
-      "y_end": 256,
+      "y_start": 209,
+      "y_end": 232,
       "height": 23
+    },
+    {
+      "index": 10,
+      "y_start": 232,
+      "y_end": 256,
+      "height": 24
     }
   ],
   "cols": [
     {
       "index": 0,
-      "x_start": 9,
-      "x_end": 32,
-      "width": 23
-    },
-    {
-      "index": 1,
-      "x_start": 33,
-      "x_end": 57,
+      "x_start": 7,
+      "x_end": 31,
       "width": 24
     },
     {
+      "index": 1,
+      "x_start": 31,
+      "x_end": 56,
+      "width": 25
+    },
+    {
       "index": 2,
-      "x_start": 58,
+      "x_start": 56,
       "x_end": 81,
-      "width": 23
+      "width": 25
     },
     {
       "index": 3,
-      "x_start": 82,
-      "x_end": 105,
-      "width": 23
+      "x_start": 81,
+      "x_end": 106,
+      "width": 25
     },
     {
       "index": 4,
       "x_start": 106,
-      "x_end": 130,
-      "width": 24
+      "x_end": 131,
+      "width": 25
     },
     {
       "index": 5,
       "x_start": 131,
-      "x_end": 155,
-      "width": 24
+      "x_end": 156,
+      "width": 25
     },
     {
       "index": 6,
       "x_start": 156,
-      "x_end": 180,
-      "width": 24
+      "x_end": 181,
+      "width": 25
     },
     {
       "index": 7,
       "x_start": 181,
-      "x_end": 205,
-      "width": 24
+      "x_end": 206,
+      "width": 25
     },
     {
       "index": 8,
       "x_start": 206,
-      "x_end": 230,
-      "width": 24
+      "x_end": 231,
+      "width": 25
     },
     {
       "index": 9,

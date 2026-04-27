@@ -12,8 +12,8 @@ local MAP_ROWS   = 18                  -- 地图行数
 ------------------------------------------------------------------------
 -- 地形 → 瓦片贴图映射
 -- 贴图来源: Textures/tiles_sliced/ (从原始 tileset 切片，24x24 透明背景)
--- 行映射: r00-r01=草地, r02=森林, r03=山脉, r04=水域,
---         r05=农田, r06=城池, r07=桥梁, r08=道路, r09=沙地
+-- 行映射(v3): r00-r01=草地, r02=森林, r03=山脉, r04-r06=水域,
+--              r07=城墙, r08=道路, r09=桥梁, r10=沙地/农田
 ------------------------------------------------------------------------
 local function slicedTiles(row, count)
     count = count or 9
@@ -25,19 +25,19 @@ local function slicedTiles(row, count)
 end
 
 local TERRAIN_TILES = {
-    grass    = slicedTiles(0, 9),   -- r00: 浅草 9 变体
+    grass    = slicedTiles(0, 10),  -- r00: 浅草 10 变体
     -- r01 也是草地变体，合并进 grass
-    forest   = slicedTiles(2, 9),   -- r02: 森林
-    mountain = slicedTiles(3, 9),   -- r03: 山脉
-    water    = slicedTiles(4, 9),   -- r04: 水域
-    farmland = slicedTiles(5, 5),   -- r05 c00-c04: 纯农田（c05-c08 是南岸水域，归 autotile）
-    city     = slicedTiles(6, 9),   -- r06: 城池
-    bridge   = slicedTiles(7, 9),   -- r07: 桥梁
-    road     = slicedTiles(8, 9),   -- r08: 道路
-    sand     = slicedTiles(9, 9),   -- r09: 沙地
+    forest   = slicedTiles(2, 10),  -- r02: 森林
+    mountain = slicedTiles(3, 10),  -- r03: 山脉
+    water    = slicedTiles(4, 10),  -- r04: 水域边缘
+    farmland = slicedTiles(10, 5),  -- r10 c00-c04: 农田/田野
+    city     = slicedTiles(7, 10),  -- r07: 城墙
+    bridge   = slicedTiles(9, 10),  -- r09: 桥梁
+    road     = slicedTiles(8, 10),  -- r08: 道路
+    sand     = slicedTiles(10, 10), -- r10: 沙地
 }
 -- 将 r01 草地变体也加入 grass 列表
-for _, v in ipairs(slicedTiles(1, 9)) do
+for _, v in ipairs(slicedTiles(1, 10)) do
     TERRAIN_TILES.grass[#TERRAIN_TILES.grass + 1] = v
 end
 
@@ -77,15 +77,15 @@ end
 --- 水域瓦片按边缘模式分组
 --- key = 哪些方向有陆地邻居
 local WATER_AUTO = {
-    center     = { wt(4,6), wt(4,8) },                     -- 四周都是水 → 中心
-    north      = { wt(4,0), wt(4,1), wt(4,4) },            -- 上方陆地 → 北岸
-    south      = { wt(5,6), wt(5,7), wt(5,8) },            -- 下方陆地 → 南岸
-    east       = { wt(4,5) },                               -- 右方陆地 → 东岸
-    west       = { wt(4,7) },                               -- 左方陆地 → 西岸
-    north_east = { wt(4,2) },                               -- 右上陆地 → 东北角
-    north_west = { wt(4,3) },                               -- 左上陆地 → 西北角
-    south_west = { wt(5,5) },                               -- 左下陆地 → 西南角
-    south_east = { wt(4,5) },                               -- 右下陆地 → 东南角（复用东岸）
+    center     = { wt(5,0), wt(5,2), wt(5,4) },            -- 四周都是水 → 深水中心
+    north      = { wt(4,0), wt(4,1), wt(4,2) },            -- 上方陆地 → 北岸
+    south      = { wt(6,4), wt(6,5), wt(6,6) },            -- 下方陆地 → 南岸
+    east       = { wt(4,5), wt(4,6) },                     -- 右方陆地 → 东岸
+    west       = { wt(4,7), wt(4,8) },                     -- 左方陆地 → 西岸
+    north_east = { wt(4,3) },                               -- 右上陆地 → 东北角
+    north_west = { wt(4,4) },                               -- 左上陆地 → 西北角
+    south_west = { wt(6,7) },                               -- 左下陆地 → 西南角
+    south_east = { wt(6,8) },                               -- 右下陆地 → 东南角
 }
 
 --- 判断地形是否属于水域（水域和桥梁在 autotile 邻居检测中视为同类）
@@ -152,15 +152,15 @@ end
 -- 城池多格布局 — 每座城占 3×3 格（墙+角+门）
 ------------------------------------------------------------------------
 local CITY_LAYOUT = {
-    nw = { wt(6, 4) },                             -- 左上角
-    n  = { wt(6, 0), wt(6, 1), wt(6, 2), wt(6, 9) }, -- 北墙（水平墙段）
-    ne = { wt(6, 4) },                             -- 右上角
-    w  = { wt(6, 5) },                             -- 西墙（垂直墙段）
-    c  = { wt(6, 7) },                             -- 城内（中心）
-    e  = { wt(6, 6) },                             -- 东墙（垂直墙段）
-    sw = { wt(6, 4) },                             -- 左下角
-    s  = { wt(6, 8) },                             -- 南门（城门楼）
-    se = { wt(6, 4) },                             -- 右下角
+    nw = { wt(7, 4) },                             -- 左上角
+    n  = { wt(7, 0), wt(7, 1) },                   -- 北墙（水平墙段）
+    ne = { wt(7, 5) },                             -- 右上角
+    w  = { wt(7, 2) },                             -- 西墙（垂直墙段）
+    c  = { wt(7, 9) },                             -- 城内（中心）
+    e  = { wt(7, 3) },                             -- 东墙（垂直墙段）
+    sw = { wt(7, 6) },                             -- 左下角
+    s  = { wt(7, 8) },                             -- 南门（城门楼）
+    se = { wt(7, 7) },                             -- 右下角
 }
 
 --- 3×3 偏移 → 布局位置键
@@ -173,45 +173,53 @@ local CITY_OFFSETS = {
 ------------------------------------------------------------------------
 -- 道路 Autotile — 根据四邻地形选择正确的道路瓦片
 ------------------------------------------------------------------------
-local ROAD_AUTO = {
-    center     = { wt(8,0), wt(8,1), wt(8,2) },   -- 多方向连接 → 实心路面
-    horizontal = { wt(8,0), wt(8,1) },             -- 东西走向
-    vertical   = { wt(8,2), wt(8,7) },             -- 南北走向
-    isolated   = { wt(8,8), wt(8,9) },             -- 孤立路块
-}
-
 --- 判断地形是否属于道路类（道路 autotile 邻居检测中视为同类）
 local function isRoadLike(terrain)
     return terrain == "road" or terrain == "bridge" or terrain == "city"
 end
 
---- 根据四邻地形选择道路瓦片
+--- 根据四邻地形选择道路瓦片（完整 autotile：直道/弯道/T路/十字）
 ---@param mapData table 地图二维数组
 ---@param r number 行号
 ---@param c number 列号
 ---@return string 瓦片路径
 local function selectRoadTile(mapData, r, c)
     local rows, cols = #mapData, #mapData[1]
-    local nRoad = r > 1    and isRoadLike(mapData[r - 1][c])
-    local sRoad = r < rows and isRoadLike(mapData[r + 1][c])
-    local eRoad = c < cols and isRoadLike(mapData[r][c + 1])
-    local wRoad = c > 1    and isRoadLike(mapData[r][c - 1])
+    local n = r > 1    and isRoadLike(mapData[r - 1][c])
+    local s = r < rows and isRoadLike(mapData[r + 1][c])
+    local e = c < cols and isRoadLike(mapData[r][c + 1])
+    local w = c > 1    and isRoadLike(mapData[r][c - 1])
 
     local count = 0
-    if nRoad then count = count + 1 end
-    if sRoad then count = count + 1 end
-    if eRoad then count = count + 1 end
-    if wRoad then count = count + 1 end
+    if n then count = count + 1 end
+    if s then count = count + 1 end
+    if e then count = count + 1 end
+    if w then count = count + 1 end
 
+    -- r08 瓦片角色:
+    -- c00,c02,c03 = 水平直道   c01,c04,c05 = 垂直直道
+    -- c06,c07 = 弯道           c08 = T路口    c09 = 十字路口
     local tiles
-    if count == 0 then
-        tiles = ROAD_AUTO.isolated
-    elseif count >= 2 then
-        tiles = ROAD_AUTO.center
-    elseif nRoad or sRoad then
-        tiles = ROAD_AUTO.vertical
+    if count == 4 then
+        tiles = { wt(8,9) }                              -- 十字路口
+    elseif count == 3 then
+        tiles = { wt(8,8), wt(8,9) }                     -- T字路口
+    elseif count == 2 then
+        if n and s then
+            tiles = { wt(8,1), wt(8,4), wt(8,5) }        -- 垂直直道
+        elseif e and w then
+            tiles = { wt(8,0), wt(8,2), wt(8,3) }        -- 水平直道
+        else
+            tiles = { wt(8,6), wt(8,7) }                  -- 弯道
+        end
+    elseif count == 1 then
+        if n or s then
+            tiles = { wt(8,1), wt(8,4) }                  -- 垂直尽头
+        else
+            tiles = { wt(8,0), wt(8,2) }                  -- 水平尽头
+        end
     else
-        tiles = ROAD_AUTO.horizontal
+        tiles = { wt(8,0), wt(8,1) }                      -- 孤立
     end
     return tiles[math.random(1, #tiles)]
 end
