@@ -512,7 +512,7 @@ function M.Create(opts)
             local tileClick = function()
                 local name = TERRAIN_NAMES[tileTerrain] or tileTerrain
                 local info = string.format("瓦片[%d,%d] %s", tileR, tileC, name)
-                log:Write(LOG_INFO, "[MAP] 点击 " .. info)
+                print(string.format("[PixelMap] 点击 %s", info))
                 if debugLabel_ then
                     debugLabel_:SetText(info)
                 end
