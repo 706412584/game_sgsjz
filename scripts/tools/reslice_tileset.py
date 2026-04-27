@@ -26,7 +26,11 @@ import numpy as np
 # 1. 标签列检测
 # ---------------------------------------------------------------------------
 def detect_label_width(arr, threshold=230):
-    """检测左侧标签列宽度（标签列通常是低密度文字区）"""
+    """检测左侧标签列宽度（标签列通常是低密度文字区）。
+
+    改进算法：找到第一列密度突变（从 <0.8 跳到 >0.8 的持续高密度区），
+    该列即为瓦片内容起始列，之前的区域为标签列。
+    """
     h, w = arr.shape[:2]
     densities = []
     for c in range(w):
@@ -34,26 +38,20 @@ def detect_label_width(arr, threshold=230):
         content = np.sum(~np.all(col > threshold, axis=1))
         densities.append(content / h)
 
-    # 5px 窗口平滑
-    window = 5
-    smoothed = []
-    for i in range(len(densities)):
-        s = max(0, i - window // 2)
-        e = min(len(densities), i + window // 2 + 1)
-        smoothed.append(np.mean(densities[s:e]))
-
-    # 找第一段连续高密度区(>0.5)起点，持续5+列
-    run = 0
-    for c in range(len(smoothed)):
-        if smoothed[c] > 0.5:
-            run += 1
-            if run >= 5:
-                label_end = c - run + 1
-                while label_end > 0 and smoothed[label_end - 1] > 0.3:
-                    label_end -= 1
-                return label_end
+    # 找第一段连续高密度区(>=0.8)的起始列，持续3+列
+    # 这比之前的算法更可靠——标签文字密度通常 0.1-0.5，瓦片内容密度通常 0.8-1.0
+    run_start = -1
+    run_count = 0
+    for c in range(w):
+        if densities[c] >= 0.8:
+            if run_count == 0:
+                run_start = c
+            run_count += 1
+            if run_count >= 3:
+                return run_start
         else:
-            run = 0
+            run_count = 0
+            run_start = -1
     return 0
 
 
@@ -247,30 +245,112 @@ def is_empty_tile(tile_arr, threshold=235):
 
 
 # ---------------------------------------------------------------------------
-# 5. 主流程
+# 5. 深色边框线检测（备选方案）
 # ---------------------------------------------------------------------------
-def analyze_and_slice(input_path, output_dir, tile_size=24, white_threshold=235):
+def detect_dark_separators(arr, axis, sample_positions, brightness_threshold=85):
+    """
+    通过多行/列采样检测深色分隔线。
+
+    axis: 'row' 检测行分隔线（在列方向采样），'col' 检测列分隔线（在行方向采样）
+    sample_positions: 采样行/列的列表
+    brightness_threshold: 低于此亮度视为分隔线候选
+
+    返回: 分隔线位置列表
+    """
+    h, w = arr.shape[:2]
+    length = h if axis == 'row' else w
+
+    # 对每个位置计算采样行/列的平均亮度
+    avg_brightness = np.zeros(length)
+    for pos in range(length):
+        total = 0
+        for sp in sample_positions:
+            if axis == 'row':
+                px = arr[pos, sp, :3]
+            else:
+                px = arr[sp, pos, :3]
+            total += (int(px[0]) + int(px[1]) + int(px[2])) / 3
+        avg_brightness[pos] = total / len(sample_positions)
+
+    # 找亮度低谷（局部最小值 + 绝对阈值）
+    separators = []
+    for pos in range(length):
+        if avg_brightness[pos] < brightness_threshold:
+            # 确认是局部最小（或在边缘）
+            is_local_min = True
+            for offset in range(1, 3):
+                if pos - offset >= 0 and avg_brightness[pos - offset] < avg_brightness[pos] - 5:
+                    is_local_min = False
+                    break
+                if pos + offset < length and avg_brightness[pos + offset] < avg_brightness[pos] - 5:
+                    is_local_min = False
+                    break
+            if is_local_min:
+                # 避免连续分隔线重复（合并相邻的）
+                if separators and pos - separators[-1] <= 2:
+                    # 保留亮度更低的那个
+                    if avg_brightness[pos] < avg_brightness[separators[-1]]:
+                        separators[-1] = pos
+                else:
+                    separators.append(pos)
+
+    return separators
+
+
+def separators_to_tile_ranges(separators, total_length):
+    """从分隔线位置推算瓦片区间"""
+    ranges = []
+    for i in range(len(separators) - 1):
+        start = separators[i] + 1
+        end = separators[i + 1]
+        if end > start:
+            ranges.append((start, end))
+    return ranges
+
+
+# ---------------------------------------------------------------------------
+# 6. 主流程
+# ---------------------------------------------------------------------------
+def analyze_and_slice(input_path, output_dir, tile_size=24, white_threshold=235,
+                      label_width_override=None):
     img = Image.open(input_path).convert("RGBA")
     arr = np.array(img)
     h, w = arr.shape[:2]
     print(f"Tileset: {w}x{h}")
 
     # --- 检测标签列 ---
-    label_w = detect_label_width(arr)
+    if label_width_override is not None:
+        label_w = label_width_override
+        print(f"Label width (manual override): {label_w}px")
+    else:
+        label_w = detect_label_width(arr)
     content_x = label_w
     print(f"Label width: {label_w}px, content starts at x={content_x}")
 
-    # --- 行分隔带检测 ---
+    # --- 行分隔带检测（先尝试白色分隔带，失败则尝试深色边框线）---
     row_densities = compute_row_densities(arr, content_x, w)
 
-    # 行方向: 分隔线通常很清晰（密度 < 0.08~0.15）
     row_thresholds = [0.08, 0.12, 0.15]
     row_bands = find_separator_bands(row_densities, 0, h, row_thresholds, band_gap=3)
-    print(f"\nRow separator bands ({len(row_bands)}):")
-    for bs, be in row_bands:
-        print(f"  y=[{bs},{be}) width={be - bs}px")
 
-    row_ranges = bands_to_tile_ranges(row_bands, 0, h, tile_size)
+    if len(row_bands) >= 2:
+        # 白色分隔带模式
+        print(f"\nRow separator bands (white, {len(row_bands)}):")
+        for bs, be in row_bands:
+            print(f"  y=[{bs},{be}) width={be - bs}px")
+        row_ranges = bands_to_tile_ranges(row_bands, 0, h, tile_size)
+    else:
+        # 深色边框线模式：用 col 0 检测行分隔线
+        print("\nNo white row separators found, trying dark border detection...")
+        row_seps = detect_dark_separators(arr, 'row', [0], brightness_threshold=120)
+        # 补充首尾边框
+        if row_seps and row_seps[0] > 2:
+            row_seps.insert(0, 0)
+        if row_seps and row_seps[-1] < h - 3:
+            row_seps.append(h - 1)
+        print(f"Row dark separators: {row_seps}")
+        row_ranges = separators_to_tile_ranges(row_seps, h)
+
     print(f"\nTile rows ({len(row_ranges)}):")
     for i, (rs, re) in enumerate(row_ranges):
         print(f"  r{i:02d}: y=[{rs},{re}) h={re - rs}px")
@@ -279,14 +359,32 @@ def analyze_and_slice(input_path, output_dir, tile_size=24, white_threshold=235)
     content_rows = [y for y in range(h) if row_densities[y] > 0.1]
     col_densities = compute_col_densities(arr, content_rows)
 
-    # 列方向: 右半清晰(< 0.08)，左半弱分隔需要高阈值(0.5)
     col_thresholds = [0.05, 0.10, 0.15, 0.25, 0.50]
     col_bands = find_separator_bands(col_densities, content_x, w, col_thresholds, band_gap=2)
-    print(f"\nCol separator bands ({len(col_bands)}):")
-    for bs, be in col_bands:
-        print(f"  x=[{bs},{be}) width={be - bs}px")
 
-    col_ranges = bands_to_tile_ranges(col_bands, content_x, w, tile_size)
+    if len(col_bands) >= 2:
+        # 白色分隔带模式
+        print(f"\nCol separator bands (white, {len(col_bands)}):")
+        for bs, be in col_bands:
+            print(f"  x=[{bs},{be}) width={be - bs}px")
+        col_ranges = bands_to_tile_ranges(col_bands, content_x, w, tile_size)
+    else:
+        # 深色边框线模式：用多行采样检测列分隔线
+        print("\nNo white col separators found, trying dark border detection...")
+        # 选取每行瓦片中间位置作为采样行
+        sample_rows = []
+        for rs, re in row_ranges:
+            mid = (rs + re) // 2
+            sample_rows.append(mid)
+        col_seps = detect_dark_separators(arr, 'col', sample_rows, brightness_threshold=85)
+        # 确保包含内容区起始边框
+        if col_seps and col_seps[0] > content_x + 2:
+            col_seps.insert(0, content_x)
+        if col_seps and col_seps[-1] < w - 3:
+            col_seps.append(w - 1)
+        print(f"Col dark separators: {col_seps}")
+        col_ranges = separators_to_tile_ranges(col_seps, w)
+
     print(f"\nTile cols ({len(col_ranges)}):")
     for i, (cs, ce) in enumerate(col_ranges):
         print(f"  c{i:02d}: x=[{cs},{ce}) w={ce - cs}px")
@@ -360,9 +458,11 @@ def main():
                         help="Output directory")
     parser.add_argument("--tile-size", type=int, default=24, help="Output tile size (default 24)")
     parser.add_argument("--white-threshold", type=int, default=235, help="White threshold (default 235)")
+    parser.add_argument("--label-width", type=int, default=None, help="Manual label column width override (auto-detect if omitted)")
     args = parser.parse_args()
 
-    analyze_and_slice(args.input, args.output, args.tile_size, args.white_threshold)
+    analyze_and_slice(args.input, args.output, args.tile_size, args.white_threshold,
+                      label_width_override=args.label_width)
 
 
 if __name__ == "__main__":

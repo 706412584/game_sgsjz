@@ -13,7 +13,7 @@ local MAP_ROWS   = 18                  -- 地图行数
 -- 地形 → 瓦片贴图映射
 -- 贴图来源: Textures/tiles_sliced/ (从原始 tileset 切片，24x24 透明背景)
 -- 行映射(v2): r00-r01=草地, r02=森林, r03=山脉, r04-r06=水域,
---              r07=城墙, r08=桥梁/城门, r09=道路, r10=沙地/农田
+--              r07=城墙, r08=道路/桥梁, r09=沙地/农田
 ------------------------------------------------------------------------
 local function slicedTiles(row, count)
     count = count or 9
@@ -30,11 +30,11 @@ local TERRAIN_TILES = {
     forest   = slicedTiles(2, 10),  -- r02: 森林
     mountain = slicedTiles(3, 10),  -- r03: 山脉
     water    = slicedTiles(4, 10),  -- r04: 水域边缘
-    farmland = slicedTiles(10, 5),  -- r10 c00-c04: 农田/田野
+    farmland = slicedTiles(9, 5),   -- r09 c00-c04: 农田/沙田
     city     = slicedTiles(7, 10),  -- r07: 城墙
-    bridge   = slicedTiles(8, 10),  -- r08: 桥梁/城门
-    road     = slicedTiles(9, 10),  -- r09: 道路
-    sand     = slicedTiles(10, 10), -- r10: 沙地
+    bridge   = slicedTiles(8, 10),  -- r08: 道路/桥梁
+    road     = slicedTiles(8, 10),  -- r08: 道路/桥梁（与bridge共享）
+    sand     = slicedTiles(9, 10),  -- r09: 沙地/农田
 }
 -- 将 r01 草地变体也加入 grass 列表
 for _, v in ipairs(slicedTiles(1, 10)) do
@@ -196,30 +196,30 @@ local function selectRoadTile(mapData, r, c)
     if e then count = count + 1 end
     if w then count = count + 1 end
 
-    -- r09 瓦片角色(v2):
+    -- r08 瓦片角色(v2):
     -- c00,c02,c03 = 水平直道   c01 = 垂直直道
     -- c04,c05 = 弯道           c07 = T路口    c06,c08,c09 = 十字路口
     local tiles
     if count == 4 then
-        tiles = { wt(9,6), wt(9,8), wt(9,9) }            -- 十字路口
+        tiles = { wt(8,6), wt(8,8), wt(8,9) }            -- 十字路口
     elseif count == 3 then
-        tiles = { wt(9,7), wt(9,6) }                     -- T字路口
+        tiles = { wt(8,7), wt(8,6) }                     -- T字路口
     elseif count == 2 then
         if n and s then
-            tiles = { wt(9,1) }                            -- 垂直直道
+            tiles = { wt(8,1) }                            -- 垂直直道
         elseif e and w then
-            tiles = { wt(9,0), wt(9,2), wt(9,3) }        -- 水平直道
+            tiles = { wt(8,0), wt(8,2), wt(8,3) }        -- 水平直道
         else
-            tiles = { wt(9,4), wt(9,5) }                  -- 弯道
+            tiles = { wt(8,4), wt(8,5) }                  -- 弯道
         end
     elseif count == 1 then
         if n or s then
-            tiles = { wt(9,1) }                            -- 垂直尽头
+            tiles = { wt(8,1) }                            -- 垂直尽头
         else
-            tiles = { wt(9,0), wt(9,2) }                  -- 水平尽头
+            tiles = { wt(8,0), wt(8,2) }                  -- 水平尽头
         end
     else
-        tiles = { wt(9,0), wt(9,1) }                      -- 孤立
+        tiles = { wt(8,0), wt(8,1) }                      -- 孤立
     end
     return tiles[math.random(1, #tiles)]
 end
