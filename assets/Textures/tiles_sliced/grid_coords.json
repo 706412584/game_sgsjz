@@ -1,20 +1,16 @@
 {
-  "image": "spr_sanguo_map_tileset_v3_20260427172209.png",
+  "image": "spr_sanguo_map_tileset.png",
   "image_size": [
     256,
     256
   ],
-  "label_width": 1,
+  "label_width": 23,
   "tile_size": 24,
   "row_separator_bands": [],
   "col_separator_bands": [
     [
-      1,
-      2
-    ],
-    [
-      6,
-      7
+      24,
+      25
     ]
   ],
   "rows": [
@@ -88,63 +84,63 @@
   "cols": [
     {
       "index": 0,
-      "x_start": 7,
-      "x_end": 31,
-      "width": 24
+      "x_start": 25,
+      "x_end": 48,
+      "width": 23
     },
     {
       "index": 1,
-      "x_start": 31,
-      "x_end": 56,
-      "width": 25
+      "x_start": 48,
+      "x_end": 71,
+      "width": 23
     },
     {
       "index": 2,
-      "x_start": 56,
-      "x_end": 81,
-      "width": 25
+      "x_start": 71,
+      "x_end": 94,
+      "width": 23
     },
     {
       "index": 3,
-      "x_start": 81,
-      "x_end": 106,
-      "width": 25
+      "x_start": 94,
+      "x_end": 117,
+      "width": 23
     },
     {
       "index": 4,
-      "x_start": 106,
-      "x_end": 131,
-      "width": 25
+      "x_start": 117,
+      "x_end": 140,
+      "width": 23
     },
     {
       "index": 5,
-      "x_start": 131,
-      "x_end": 156,
-      "width": 25
+      "x_start": 140,
+      "x_end": 163,
+      "width": 23
     },
     {
       "index": 6,
-      "x_start": 156,
-      "x_end": 181,
-      "width": 25
+      "x_start": 163,
+      "x_end": 186,
+      "width": 23
     },
     {
       "index": 7,
-      "x_start": 181,
-      "x_end": 206,
-      "width": 25
+      "x_start": 186,
+      "x_end": 209,
+      "width": 23
     },
     {
       "index": 8,
-      "x_start": 206,
-      "x_end": 231,
-      "width": 25
+      "x_start": 209,
+      "x_end": 232,
+      "width": 23
     },
     {
       "index": 9,
-      "x_start": 231,
+      "x_start": 232,
       "x_end": 256,
-      "width": 25
+      "width": 24
     }
   ]
 }

@@ -12,8 +12,8 @@ local MAP_ROWS   = 18                  -- 地图行数
 ------------------------------------------------------------------------
 -- 地形 → 瓦片贴图映射
 -- 贴图来源: Textures/tiles_sliced/ (从原始 tileset 切片，24x24 透明背景)
--- 行映射(v3): r00-r01=草地, r02=森林, r03=山脉, r04-r06=水域,
---              r07=城墙, r08=道路, r09=桥梁, r10=沙地/农田
+-- 行映射(v2): r00-r01=草地, r02=森林, r03=山脉, r04-r06=水域,
+--              r07=城墙, r08=桥梁/城门, r09=道路, r10=沙地/农田
 ------------------------------------------------------------------------
 local function slicedTiles(row, count)
     count = count or 9
@@ -32,8 +32,8 @@ local TERRAIN_TILES = {
     water    = slicedTiles(4, 10),  -- r04: 水域边缘
     farmland = slicedTiles(10, 5),  -- r10 c00-c04: 农田/田野
     city     = slicedTiles(7, 10),  -- r07: 城墙
-    bridge   = slicedTiles(9, 10),  -- r09: 桥梁
-    road     = slicedTiles(8, 10),  -- r08: 道路
+    bridge   = slicedTiles(8, 10),  -- r08: 桥梁/城门
+    road     = slicedTiles(9, 10),  -- r09: 道路
     sand     = slicedTiles(10, 10), -- r10: 沙地
 }
 -- 将 r01 草地变体也加入 grass 列表
@@ -152,15 +152,15 @@ end
 -- 城池多格布局 — 每座城占 3×3 格（墙+角+门）
 ------------------------------------------------------------------------
 local CITY_LAYOUT = {
-    nw = { wt(7, 4) },                             -- 左上角
+    nw = { wt(7, 4) },                             -- 左上角（墙段过渡）
     n  = { wt(7, 0), wt(7, 1) },                   -- 北墙（水平墙段）
-    ne = { wt(7, 5) },                             -- 右上角
-    w  = { wt(7, 2) },                             -- 西墙（垂直墙段）
+    ne = { wt(7, 8) },                             -- 右上角（纯灰砖）
+    w  = { wt(7, 3) },                             -- 西墙（垂直墙段）
     c  = { wt(7, 9) },                             -- 城内（中心）
-    e  = { wt(7, 3) },                             -- 东墙（垂直墙段）
-    sw = { wt(7, 6) },                             -- 左下角
-    s  = { wt(7, 8) },                             -- 南门（城门楼）
-    se = { wt(7, 7) },                             -- 右下角
+    e  = { wt(7, 2) },                             -- 东墙（垂直墙段）
+    sw = { wt(7, 7) },                             -- 左下角
+    s  = { wt(7, 6) },                             -- 南门（城门楼）
+    se = { wt(7, 5) },                             -- 右下角（墙+门饰）
 }
 
 --- 3×3 偏移 → 布局位置键
@@ -196,30 +196,30 @@ local function selectRoadTile(mapData, r, c)
     if e then count = count + 1 end
     if w then count = count + 1 end
 
-    -- r08 瓦片角色:
-    -- c00,c02,c03 = 水平直道   c01,c04,c05 = 垂直直道
-    -- c06,c07 = 弯道           c08 = T路口    c09 = 十字路口
+    -- r09 瓦片角色(v2):
+    -- c00,c02,c03 = 水平直道   c01 = 垂直直道
+    -- c04,c05 = 弯道           c07 = T路口    c06,c08,c09 = 十字路口
     local tiles
     if count == 4 then
-        tiles = { wt(8,9) }                              -- 十字路口
+        tiles = { wt(9,6), wt(9,8), wt(9,9) }            -- 十字路口
     elseif count == 3 then
-        tiles = { wt(8,8), wt(8,9) }                     -- T字路口
+        tiles = { wt(9,7), wt(9,6) }                     -- T字路口
     elseif count == 2 then
         if n and s then
-            tiles = { wt(8,1), wt(8,4), wt(8,5) }        -- 垂直直道
+            tiles = { wt(9,1) }                            -- 垂直直道
         elseif e and w then
-            tiles = { wt(8,0), wt(8,2), wt(8,3) }        -- 水平直道
+            tiles = { wt(9,0), wt(9,2), wt(9,3) }        -- 水平直道
         else
-            tiles = { wt(8,6), wt(8,7) }                  -- 弯道
+            tiles = { wt(9,4), wt(9,5) }                  -- 弯道
         end
     elseif count == 1 then
         if n or s then
-            tiles = { wt(8,1), wt(8,4) }                  -- 垂直尽头
+            tiles = { wt(9,1) }                            -- 垂直尽头
         else
-            tiles = { wt(8,0), wt(8,2) }                  -- 水平尽头
+            tiles = { wt(9,0), wt(9,2) }                  -- 水平尽头
         end
     else
-        tiles = { wt(8,0), wt(8,1) }                      -- 孤立
+        tiles = { wt(9,0), wt(9,1) }                      -- 孤立
     end
     return tiles[math.random(1, #tiles)]
 end
