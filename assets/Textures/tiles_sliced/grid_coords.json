@@ -1,0 +1,209 @@
+{
+  "image": "spr_sanguo_map_tileset_20260427103958.png",
+  "image_size": [
+    256,
+    256
+  ],
+  "label_width": 8,
+  "tile_size": 24,
+  "row_separator_bands": [
+    [
+      0,
+      1
+    ],
+    [
+      24,
+      25
+    ],
+    [
+      48,
+      49
+    ],
+    [
+      73,
+      77
+    ],
+    [
+      103,
+      105
+    ],
+    [
+      134,
+      135
+    ],
+    [
+      160,
+      161
+    ],
+    [
+      182,
+      187
+    ]
+  ],
+  "col_separator_bands": [
+    [
+      8,
+      9
+    ],
+    [
+      32,
+      33
+    ],
+    [
+      57,
+      58
+    ],
+    [
+      81,
+      82
+    ],
+    [
+      105,
+      106
+    ],
+    [
+      130,
+      131
+    ],
+    [
+      155,
+      156
+    ],
+    [
+      180,
+      181
+    ],
+    [
+      205,
+      206
+    ],
+    [
+      230,
+      231
+    ]
+  ],
+  "rows": [
+    {
+      "index": 0,
+      "y_start": 1,
+      "y_end": 24,
+      "height": 23
+    },
+    {
+      "index": 1,
+      "y_start": 25,
+      "y_end": 48,
+      "height": 23
+    },
+    {
+      "index": 2,
+      "y_start": 49,
+      "y_end": 73,
+      "height": 24
+    },
+    {
+      "index": 3,
+      "y_start": 77,
+      "y_end": 103,
+      "height": 26
+    },
+    {
+      "index": 4,
+      "y_start": 105,
+      "y_end": 134,
+      "height": 29
+    },
+    {
+      "index": 5,
+      "y_start": 135,
+      "y_end": 160,
+      "height": 25
+    },
+    {
+      "index": 6,
+      "y_start": 161,
+      "y_end": 182,
+      "height": 21
+    },
+    {
+      "index": 7,
+      "y_start": 187,
+      "y_end": 210,
+      "height": 23
+    },
+    {
+      "index": 8,
+      "y_start": 210,
+      "y_end": 233,
+      "height": 23
+    },
+    {
+      "index": 9,
+      "y_start": 233,
+      "y_end": 256,
+      "height": 23
+    }
+  ],
+  "cols": [
+    {
+      "index": 0,
+      "x_start": 9,
+      "x_end": 32,
+      "width": 23
+    },
+    {
+      "index": 1,
+      "x_start": 33,
+      "x_end": 57,
+      "width": 24
+    },
+    {
+      "index": 2,
+      "x_start": 58,
+      "x_end": 81,
+      "width": 23
+    },
+    {
+      "index": 3,
+      "x_start": 82,
+      "x_end": 105,
+      "width": 23
+    },
+    {
+      "index": 4,
+      "x_start": 106,
+      "x_end": 130,
+      "width": 24
+    },
+    {
+      "index": 5,
+      "x_start": 131,
+      "x_end": 155,
+      "width": 24
+    },
+    {
+      "index": 6,
+      "x_start": 156,
+      "x_end": 180,
+      "width": 24
+    },
+    {
+      "index": 7,
+      "x_start": 181,
+      "x_end": 205,
+      "width": 24
+    },
+    {
+      "index": 8,
+      "x_start": 206,
+      "x_end": 230,
+      "width": 24
+    },
+    {
+      "index": 9,
+      "x_start": 231,
+      "x_end": 256,
+      "width": 25
+    }
+  ]
+}
