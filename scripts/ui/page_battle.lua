@@ -240,6 +240,21 @@ local function showActionEffects(action)
         end
     end
 
+    -- 全量士气同步：刷新所有受全局士气变化影响的单位黄条
+    if action.allMorales then
+        for uName, uMorale in pairs(action.allMorales) do
+            local u = unitByName_[uName]
+            if u then
+                local st = unitState_[u.id]
+                if st and st.alive then
+                    st.morale = uMorale
+                    BField.UpdateUnit(u.id, st.hp, st.maxHp,
+                        st.morale, st.statuses, st.alive)
+                end
+            end
+        end
+    end
+
     -- 战法释放: 给攻击者卡牌金色闪烁
     if action.type == "skill" and actorId then
         BField.FlashSkillGlow(actorId)

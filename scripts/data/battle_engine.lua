@@ -1331,6 +1331,15 @@ local function executeAction(actor, allUnits)
     end
     action.targetMorales = targetMorales
 
+    -- 全量士气快照：战鼓增怒/减怒、被击等影响非直接目标的士气变化
+    local allMorales = {}
+    for _, u in ipairs(allUnits) do
+        if u.alive then
+            allMorales[u.name] = u.morale or 0
+        end
+    end
+    action.allMorales = allMorales
+
     return action
 end
 
