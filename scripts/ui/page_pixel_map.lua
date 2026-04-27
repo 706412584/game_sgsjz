@@ -1,377 +1,28 @@
--- ui/page_pixel_map.lua — 像素地图（切片瓦片贴图渲染）
+-- ui/page_pixel_map.lua — 像素地图（TileMap2D 引擎加载 TMX）
 local UI = require("urhox-libs/UI")
 local Comp = require("ui.components")
 
 local M = {}
 
--- 瓦片配置
-local TILE_PX    = 36                  -- 每格显示像素
-local MAP_COLS   = 36                  -- 地图列数
-local MAP_ROWS   = 18                  -- 地图行数
+-- TMX 地图配置
+local TMX_PATH   = "未命名.tmx"
+local MAP_COLS   = 30
+local MAP_ROWS   = 20
+local TILE_PX    = 24   -- 原始瓦片像素
 
-------------------------------------------------------------------------
--- 地形 → 瓦片贴图映射
--- 贴图来源: Textures/tiles_sliced/ (从原始 tileset 切片，24x24 透明背景)
--- 行映射(v2): r00-r01=草地, r02=森林, r03=山脉, r04=水域边缘, r05=水域内部,
---              r06=城墙, r07=城门/桥梁, r08=道路, r09=沙地/农田
-------------------------------------------------------------------------
-local function slicedTiles(row, count)
-    count = count or 9
-    local t = {}
-    for c = 0, count - 1 do
-        t[#t + 1] = string.format("Textures/tiles_sliced/tile_r%02d_c%02d.png", row, c)
-    end
-    return t
-end
-
-local TERRAIN_TILES = {
-    grass    = slicedTiles(0, 9),   -- r00: 浅草 9 变体
-    -- r01 也是草地变体，合并进 grass
-    forest   = slicedTiles(2, 9),   -- r02: 森林
-    mountain = slicedTiles(3, 9),   -- r03: 山脉
-    water    = slicedTiles(4, 9),   -- r04: 水域边缘
-    farmland = slicedTiles(9, 5),   -- r09 c00-c04: 农田/沙田
-    city     = slicedTiles(6, 9),   -- r06: 城墙
-    bridge   = slicedTiles(7, 9),   -- r07: 城门/桥梁
-    road     = slicedTiles(8, 9),   -- r08: 道路
-    sand     = slicedTiles(9, 9),   -- r09: 沙地/农田
+-- tileset 行 → 地形名映射（9列/行）
+local ROW_TERRAIN = {
+    [0] = "grass",    -- r00: 草地
+    [1] = "grass",    -- r01: 草地变体
+    [2] = "forest",   -- r02: 森林
+    [3] = "mountain", -- r03: 山脉
+    [4] = "water",    -- r04: 水域边缘
+    [5] = "water",    -- r05: 水域内部
+    [6] = "city",     -- r06: 城墙
+    [7] = "bridge",   -- r07: 城门/桥梁
+    [8] = "road",     -- r08: 道路
+    [9] = "sand",     -- r09: 沙地/农田
 }
--- 将 r01 草地变体也加入 grass 列表
-for _, v in ipairs(slicedTiles(1, 9)) do
-    TERRAIN_TILES.grass[#TERRAIN_TILES.grass + 1] = v
-end
-
---- 地形底色（切片贴图有透明区域，需底色衬托）
-local TERRAIN_BG = {
-    grass    = { 92, 168, 64, 255 },
-    forest   = { 54, 120, 48, 255 },
-    water    = { 52, 108, 200, 255 },
-    mountain = { 148, 128, 96, 255 },
-    road     = { 160, 140, 90, 255 },
-    city     = { 140, 130, 110, 255 },
-    sand     = { 208, 192, 136, 255 },
-    bridge   = { 60, 100, 180, 255 },
-    farmland = { 100, 150, 60, 255 },
-}
-
---- 图例用的代表色（仅用于底部图例色块显示）
-local LEGEND_COLORS = {
-    grass    = { 92, 168, 64 },
-    forest   = { 34, 110, 38 },
-    water    = { 52, 108, 200 },
-    mountain = { 148, 128, 96 },
-    road     = { 188, 168, 112 },
-    city     = { 228, 188, 64 },
-    sand     = { 208, 192, 136 },
-    bridge   = { 160, 130, 80 },
-    farmland = { 100, 160, 60 },
-}
-
-------------------------------------------------------------------------
--- 水域 Autotile —— 根据四邻地形选择正确的边缘/角/中心瓦片
-------------------------------------------------------------------------
-local function wt(row, col)
-    return string.format("Textures/tiles_sliced/tile_r%02d_c%02d.png", row, col)
-end
-
---- 水域瓦片按边缘模式分组
---- key = 哪些方向有陆地邻居
-local WATER_AUTO = {
-    center     = { wt(5,0), wt(5,2), wt(5,4) },            -- 四周都是水 → 深水中心
-    north      = { wt(4,0), wt(4,1), wt(4,2) },            -- 上方陆地 → 北岸
-    south      = { wt(5,6), wt(5,7) },                     -- 下方陆地 → 南岸
-    east       = { wt(4,5), wt(4,6) },                     -- 右方陆地 → 东岸
-    west       = { wt(4,7), wt(4,8) },                     -- 左方陆地 → 西岸
-    north_east = { wt(4,3) },                               -- 右上陆地 → 东北角
-    north_west = { wt(4,4) },                               -- 左上陆地 → 西北角
-    south_west = { wt(5,3) },                               -- 左下陆地 → 西南角
-    south_east = { wt(5,1) },                               -- 右下陆地 → 东南角
-}
-
---- 判断地形是否属于水域（水域和桥梁在 autotile 邻居检测中视为同类）
-local function isWaterLike(terrain)
-    return terrain == "water" or terrain == "bridge"
-end
-
---- 根据四邻地形选择水域瓦片
----@param mapData table 地图二维数组
----@param r number 行号
----@param c number 列号
----@return string 瓦片路径
-local function selectWaterTile(mapData, r, c)
-    local rows, cols = #mapData, #mapData[1]
-
-    -- 检测四方向是否为陆地（地图边界视为水域，避免边缘产生假岸线）
-    local nLand = false
-    local sLand = false
-    local eLand = false
-    local wLand = false
-    if r > 1    then nLand = not isWaterLike(mapData[r - 1][c]) end
-    if r < rows then sLand = not isWaterLike(mapData[r + 1][c]) end
-    if c < cols then eLand = not isWaterLike(mapData[r][c + 1]) end
-    if c > 1    then wLand = not isWaterLike(mapData[r][c - 1]) end
-
-    -- 统计陆地邻居数量
-    local landCount = 0
-    if nLand then landCount = landCount + 1 end
-    if sLand then landCount = landCount + 1 end
-    if eLand then landCount = landCount + 1 end
-    if wLand then landCount = landCount + 1 end
-
-    -- 匹配模式：0→中心，3+→被围（用中心），2→角/窄道，1→岸
-    local key
-    if landCount == 0 or landCount >= 3 then
-        key = "center"
-    elseif nLand and eLand then
-        key = "north_east"
-    elseif nLand and wLand then
-        key = "north_west"
-    elseif sLand and wLand then
-        key = "south_west"
-    elseif sLand and eLand then
-        key = "south_east"
-    elseif nLand and sLand then
-        -- 南北夹缝（窄河横道），随机取南或北岸
-        key = math.random(2) == 1 and "north" or "south"
-    elseif eLand and wLand then
-        -- 东西夹缝（窄河纵道），随机取东或西岸
-        key = math.random(2) == 1 and "east" or "west"
-    elseif nLand then key = "north"
-    elseif sLand then key = "south"
-    elseif eLand then key = "east"
-    elseif wLand then key = "west"
-    else
-        key = "center"
-    end
-
-    local tiles = WATER_AUTO[key]
-    return tiles[math.random(1, #tiles)]
-end
-
-------------------------------------------------------------------------
--- 城池多格布局 — 每座城占 3×3 格（墙+角+门）
-------------------------------------------------------------------------
-local CITY_LAYOUT = {
-    nw = { wt(6, 4) },                             -- 左上角（装饰墙）
-    n  = { wt(6, 0), wt(6, 1) },                   -- 北墙（水平墙段）
-    ne = { wt(6, 5) },                             -- 右上角（装饰墙）
-    w  = { wt(6, 3) },                             -- 西墙（垂直墙段）
-    c  = { wt(6, 8) },                             -- 城内（灰砖填充）
-    e  = { wt(6, 2) },                             -- 东墙（垂直墙段）
-    sw = { wt(6, 7) },                             -- 左下角
-    s  = { wt(7, 0), wt(7, 1) },                   -- 南门（城门+火把）
-    se = { wt(6, 6) },                             -- 右下角（南墙/门饰）
-}
-
---- 3×3 偏移 → 布局位置键
-local CITY_OFFSETS = {
-    { -1, -1, "nw" }, { -1, 0, "n" }, { -1, 1, "ne" },
-    {  0, -1, "w"  }, {  0, 0, "c" }, {  0, 1, "e"  },
-    {  1, -1, "sw" }, {  1, 0, "s" }, {  1, 1, "se" },
-}
-
-------------------------------------------------------------------------
--- 道路 Autotile — 根据四邻地形选择正确的道路瓦片
-------------------------------------------------------------------------
---- 判断地形是否属于道路类（道路 autotile 邻居检测中视为同类）
-local function isRoadLike(terrain)
-    return terrain == "road" or terrain == "bridge" or terrain == "city"
-end
-
---- 根据四邻地形选择道路瓦片（完整 autotile：直道/弯道/T路/十字）
----@param mapData table 地图二维数组
----@param r number 行号
----@param c number 列号
----@return string 瓦片路径
-local function selectRoadTile(mapData, r, c)
-    local rows, cols = #mapData, #mapData[1]
-    local n = r > 1    and isRoadLike(mapData[r - 1][c])
-    local s = r < rows and isRoadLike(mapData[r + 1][c])
-    local e = c < cols and isRoadLike(mapData[r][c + 1])
-    local w = c > 1    and isRoadLike(mapData[r][c - 1])
-
-    local count = 0
-    if n then count = count + 1 end
-    if s then count = count + 1 end
-    if e then count = count + 1 end
-    if w then count = count + 1 end
-
-    -- r08 瓦片角色(v2, 9列 c00-c08):
-    -- c00 = 水平直道  c01 = 垂直直道  c02,c03 = 弯道
-    -- c04,c05 = 弯道  c06,c07 = T路口  c08 = 十字路口
-    local tiles
-    if count == 4 then
-        tiles = { wt(8,8), wt(8,6), wt(8,7) }            -- 十字路口
-    elseif count == 3 then
-        tiles = { wt(8,6), wt(8,7) }                     -- T字路口
-    elseif count == 2 then
-        if n and s then
-            tiles = { wt(8,1) }                            -- 垂直直道
-        elseif e and w then
-            tiles = { wt(8,0), wt(8,2), wt(8,3) }        -- 水平直道
-        else
-            tiles = { wt(8,4), wt(8,5) }                  -- 弯道
-        end
-    elseif count == 1 then
-        if n or s then
-            tiles = { wt(8,1) }                            -- 垂直尽头
-        else
-            tiles = { wt(8,0), wt(8,2) }                  -- 水平尽头
-        end
-    else
-        tiles = { wt(8,0), wt(8,1) }                      -- 孤立
-    end
-    return tiles[math.random(1, #tiles)]
-end
-
---- 从瓦片列表中随机选一个贴图路径
-local function randomTile(terrainType)
-    local list = TERRAIN_TILES[terrainType] or TERRAIN_TILES.grass
-    return list[math.random(1, #list)]
-end
-
---- 地形生成 — 三国大地图风格
-local function generateMap()
-    math.randomseed(os.time())
-    local map = {}
-    for r = 1, MAP_ROWS do
-        map[r] = {}
-        for c = 1, MAP_COLS do
-            map[r][c] = "grass"
-        end
-    end
-
-    -- 1) 长江横河（第 10-11 行，蜿蜒）
-    local riverCenter = 10
-    for c = 1, MAP_COLS do
-        local offset = math.floor(math.sin(c * 0.35) * 1.5 + 0.5)
-        for dr = 0, 1 do
-            local rr = riverCenter + offset + dr
-            if rr >= 1 and rr <= MAP_ROWS then
-                map[rr][c] = "water"
-            end
-        end
-    end
-
-    -- 2) 支流（纵向，约第 12 列，往下流）
-    local branchCol = 12
-    for r = 1, MAP_ROWS do
-        local cc = branchCol + math.floor(math.sin(r * 0.6) * 1 + 0.5)
-        if cc >= 1 and cc <= MAP_COLS then
-            if r < riverCenter - 1 or r > riverCenter + 3 then
-                if math.random(100) < 70 then
-                    map[r][cc] = "water"
-                end
-            end
-        end
-    end
-
-    -- 3) 北方山脉（第 1-3 行）
-    for c = 1, MAP_COLS do
-        for r = 1, 3 do
-            if math.random(100) < 60 + (3 - r) * 12 then
-                map[r][c] = "mountain"
-            end
-        end
-    end
-
-    -- 4) 南方零星山丘（第 14-16 行）
-    for c = 1, MAP_COLS do
-        for r = 14, 16 do
-            if math.random(100) < 20 then
-                map[r][c] = "mountain"
-            end
-        end
-    end
-
-    -- 5) 南方沙地（最底 2 行局部）
-    for c = 1, MAP_COLS do
-        for r = MAP_ROWS - 1, MAP_ROWS do
-            if math.random(100) < 40 then
-                map[r][c] = "sand"
-            end
-        end
-    end
-
-    -- 6) 农田（散布在草地上，河流南岸附近）
-    for c = 1, MAP_COLS do
-        for r = 12, 14 do
-            if map[r][c] == "grass" and math.random(100) < 18 then
-                map[r][c] = "farmland"
-            end
-        end
-    end
-
-    -- 7) 主干道：横向穿过第 6 行
-    for c = 1, MAP_COLS do
-        local rr = 6 + math.floor(math.sin(c * 0.25) * 0.8 + 0.5)
-        if rr >= 1 and rr <= MAP_ROWS and map[rr][c] == "grass" then
-            map[rr][c] = "road"
-        end
-    end
-    -- 纵向道路穿过第 20 列
-    for r = 1, MAP_ROWS do
-        local cc = 20 + math.floor(math.sin(r * 0.4) * 0.8 + 0.5)
-        if cc >= 1 and cc <= MAP_COLS and (map[r][cc] == "grass" or map[r][cc] == "road") then
-            map[r][cc] = "road"
-        end
-    end
-
-    -- 8) 桥梁：道路穿过河流的位置
-    for r = 1, MAP_ROWS do
-        for c = 1, MAP_COLS do
-            if map[r][c] == "water" then
-                local hasRoadNeighbor = false
-                if r > 1 and map[r - 1][c] == "road" then hasRoadNeighbor = true end
-                if r < MAP_ROWS and map[r + 1][c] == "road" then hasRoadNeighbor = true end
-                if c > 1 and map[r][c - 1] == "road" then hasRoadNeighbor = true end
-                if c < MAP_COLS and map[r][c + 1] == "road" then hasRoadNeighbor = true end
-                if hasRoadNeighbor then
-                    map[r][c] = "bridge"
-                end
-            end
-        end
-    end
-
-    -- 9) 森林散布（只覆盖草地）
-    for r = 1, MAP_ROWS do
-        for c = 1, MAP_COLS do
-            if map[r][c] == "grass" and math.random(100) < 22 then
-                map[r][c] = "forest"
-            end
-        end
-    end
-
-    -- 10) 城池放置（三国经典城市布局）——每城占 3×3 格
-    local cities = {
-        { r = 3,  c = 8,  name = "邺城" },
-        { r = 4,  c = 28, name = "许昌" },
-        { r = 5,  c = 18, name = "洛阳" },
-        { r = 7,  c = 6,  name = "汉中" },
-        { r = 7,  c = 32, name = "寿春" },
-        { r = 13, c = 8,  name = "成都" },
-        { r = 13, c = 24, name = "建业" },
-        { r = 15, c = 16, name = "长沙" },
-    }
-    local cityPosMap = {}  -- "r_c" → 布局位置 (nw/n/ne/w/c/e/sw/s/se)
-    for _, ct in ipairs(cities) do
-        for _, off in ipairs(CITY_OFFSETS) do
-            local rr = ct.r + off[1]
-            local cc = ct.c + off[2]
-            if rr >= 1 and rr <= MAP_ROWS and cc >= 1 and cc <= MAP_COLS then
-                map[rr][cc] = "city"
-                cityPosMap[rr .. "_" .. cc] = off[3]
-            end
-        end
-        -- 城门前方加一格道路连接
-        local gateR = ct.r + 2
-        if gateR >= 1 and gateR <= MAP_ROWS and map[gateR][ct.c] ~= "water" then
-            map[gateR][ct.c] = "road"
-        end
-    end
-
-    return map, cities, cityPosMap
-end
 
 --- 地形中文名（调试用）
 local TERRAIN_NAMES = {
@@ -383,7 +34,82 @@ local TERRAIN_NAMES = {
     city     = "城池",
     sand     = "沙地",
     bridge   = "桥梁",
-    farmland = "农田",
+}
+
+--- 地形底色
+local TERRAIN_BG = {
+    grass    = { 92, 168, 64, 255 },
+    forest   = { 54, 120, 48, 255 },
+    water    = { 52, 108, 200, 255 },
+    mountain = { 148, 128, 96, 255 },
+    road     = { 160, 140, 90, 255 },
+    city     = { 140, 130, 110, 255 },
+    sand     = { 208, 192, 136, 255 },
+    bridge   = { 60, 100, 180, 255 },
+}
+
+--- 图例色
+local LEGEND_COLORS = {
+    grass    = { 92, 168, 64 },
+    forest   = { 34, 110, 38 },
+    water    = { 52, 108, 200 },
+    mountain = { 148, 128, 96 },
+    road     = { 188, 168, 112 },
+    city     = { 228, 188, 64 },
+    sand     = { 208, 192, 136 },
+    bridge   = { 160, 130, 80 },
+}
+
+------------------------------------------------------------------------
+-- TMX CSV 解析：嵌入 TMX 数据，避免运行时 XML 解析
+-- Tiled 翻转标记位
+------------------------------------------------------------------------
+local FLIP_H    = 0x80000000
+local FLIP_V    = 0x40000000
+local FLIP_D    = 0x20000000
+local FLIP_MASK = FLIP_H | FLIP_V | FLIP_D
+local FIRSTGID  = 1
+local TILESET_COLS = 9
+
+--- 从 tile GID 获取切片路径和地形
+local function tileInfo(gid)
+    if gid == 0 then
+        return "Textures/tiles_sliced/tile_r00_c00.png", "grass"
+    end
+    local raw = gid & ~FLIP_MASK  -- 去掉翻转位
+    local idx = raw - FIRSTGID
+    if idx < 0 then idx = 0 end
+    local row = math.floor(idx / TILESET_COLS)
+    local col = idx % TILESET_COLS
+    local path = string.format("Textures/tiles_sliced/tile_r%02d_c%02d.png", row, col)
+    local terrain = ROW_TERRAIN[row] or "grass"
+    return path, terrain
+end
+
+------------------------------------------------------------------------
+-- TMX 地图数据（从 未命名.tmx CSV 提取）
+------------------------------------------------------------------------
+local TMX_DATA = {
+    {14,14,14,14,14,25,25,14,14,14,14,21,14,14,21,21,14,14,21,14,14,14,14,15,5,6,5,6,5,6},
+    {15,33,34,35,36,65,73,73,73,73,73,73,73,73,73,73,3221225549,5,5,6,5,6,14,15,14,5,6,15,14,15},
+    {15,25,25,3,3,25,3,3,22,3,3,25,3,22,3,3,74,14,14,15,14,15,5,6,31,14,21,5,6,6},
+    {15,57,57,57,57,57,57,57,57,57,57,57,57,57,57,57,65,57,57,57,57,57,57,57,57,57,57,57,57,56},
+    {19,536870968,5,5,3758096432,38,38,38,38,38,38,38,38,38,38,39,74,31,5,5,13,14,22,15,31,14,5,5,5,23},
+    {15,536870968,25,25,1610612774,45,1073741862,1073741862,65,73,73,73,73,73,73,73,1610612813,31,5,32,13,86,13,5,6,5,14,21,5,5},
+    {15,536870968,5,5,1610612774,3758096422,4,4,74,25,4,4,4,25,3,25,4,4,5,13,13,13,5,14,15,14,14,15,5,5},
+    {19,536870968,5,5,1610612774,3758096422,4,25,74,4,4,25,25,20,3,25,25,4,4,33,34,35,36,5,5,22,5,6,5,5},
+    {19,536870968,5,5,1610612774,3758096422,25,25,77,81,73,73,73,73,73,73,73,73,73,65,24,5,5,5,25,15,15,15,22,5},
+    {15,536870968,5,5,1610612774,3758096422,4,4,4,74,20,6,6,6,6,6,24,24,24,24,24,5,5,25,25,5,14,25,5,5},
+    {15,536870968,25,25,1610612774,3758096422,59,57,57,65,57,57,57,57,25,6,24,5,5,5,5,5,5,14,5,5,22,5,15,5},
+    {19,536870968,25,5,1610612774,3758096422,1610612793,63,63,63,63,63,63,2684354617,25,6,24,24,24,24,24,24,5,5,21,5,5,5,15,15},
+    {19,536870968,5,5,1610612774,3758096422,1610612793,63,63,63,63,63,63,2684354617,6,25,6,25,6,6,6,24,5,5,5,5,25,5,5,5},
+    {19,536870968,5,5,1610612774,3758096422,1610612793,63,63,63,63,63,63,2684354617,6,6,25,6,6,6,6,6,13,13,13,5,22,14,5,5},
+    {19,536870968,5,5,1610612774,2684354598,56,56,56,65,57,57,57,56,13,13,13,20,13,13,13,13,13,13,13,5,14,14,25,5},
+    {19,536870968,5,25,1610612774,68,69,70,25,10,12,3,13,13,10,13,25,13,13,13,13,5,5,13,22,5,5,14,5,5},
+    {56,536870968,5,5,47,1073741862,48,12,10,10,12,25,13,20,13,13,13,13,13,13,1,13,5,5,5,5,5,22,5,5},
+    {15,33,34,35,36,5,5,23,24,24,24,24,24,24,24,24,24,24,24,29,33,34,35,36,5,22,5,5,5,5},
+    {19,6,6,6,6,6,25,23,23,23,24,5,5,5,6,5,5,5,5,5,15,15,5,5,5,5,25,15,15,5},
+    {19,19,19,19,25,15,25,25,25,15,17,17,17,17,15,25,25,15,17,15,15,15,25,17,17,17,17,14,15,15},
 }
 
 local container_ = nil
@@ -395,7 +121,6 @@ local debugLabel_ = nil
 function M.Create(opts)
     opts = opts or {}
     onBack_ = opts.onBack
-    local mapData, cities, cityPosMap = generateMap()
 
     -- 全屏容器
     container_ = UI.Panel {
@@ -439,7 +164,7 @@ function M.Create(opts)
     topBar:AddChild(leftRow)
     -- 右侧：调试信息 + 尺寸
     debugLabel_ = UI.Label {
-        text      = "点击瓦片查看信息",
+        text      = "Tiled TMX 30x20",
         fontSize  = 11,
         fontColor = { 120, 230, 180, 220 },
     }
@@ -458,6 +183,7 @@ function M.Create(opts)
     container_:AddChild(topBar)
 
     -- 地图滚动区域
+    local DISPLAY_PX = 36  -- 每格显示像素（放大显示）
     local scrollWrap = UI.Panel {
         width          = "100%",
         flexGrow       = 1,
@@ -468,98 +194,47 @@ function M.Create(opts)
         paddingBottom  = 8,
     }
 
-    -- 地图网格面板（绝对定位瓦片 +1px 重叠消除 NanoVG 抗锯齿接缝）
+    -- 地图网格面板
     local mapPanel = UI.Panel {
-        width           = MAP_COLS * TILE_PX,
-        height          = MAP_ROWS * TILE_PX,
+        width           = MAP_COLS * DISPLAY_PX,
+        height          = MAP_ROWS * DISPLAY_PX,
         overflow        = "hidden",
-        backgroundColor = { 92, 168, 64, 255 },  -- 草绿兜底，防止暗色透出
+        backgroundColor = { 92, 168, 64, 255 },
     }
 
-    -- 城市名称查找表
-    local cityLookup = {}
-    for _, ct in ipairs(cities) do
-        cityLookup[ct.r .. "_" .. ct.c] = ct.name
-    end
-
-    -- 填充瓦片贴图（绝对定位 +1px 重叠，消除 NanoVG 抗锯齿接缝）
-    local OVERLAP = 1  -- 每瓦片向右下多画 1px，覆盖相邻抗锯齿边
+    -- 渲染 TMX 瓦片
+    local OVERLAP = 1
     for r = 1, MAP_ROWS do
+        local rowData = TMX_DATA[r]
+        if not rowData then break end
         for c = 1, MAP_COLS do
-            local terrain = mapData[r][c]
-            local tilePath
-            if terrain == "water" then
-                tilePath = selectWaterTile(mapData, r, c)
-            elseif terrain == "road" then
-                tilePath = selectRoadTile(mapData, r, c)
-            elseif terrain == "city" then
-                local pos = cityPosMap[r .. "_" .. c]
-                if pos then
-                    local tiles = CITY_LAYOUT[pos]
-                    tilePath = tiles[math.random(1, #tiles)]
-                else
-                    tilePath = randomTile("city")
-                end
-            else
-                tilePath = randomTile(terrain)
-            end
-            local cityName = cityLookup[r .. "_" .. c]
-
+            local gid = rowData[c] or 0
+            local tilePath, terrain = tileInfo(gid)
             local bg = TERRAIN_BG[terrain] or TERRAIN_BG.grass
 
-            -- 瓦片点击回调（调试：显示行列+地形+切片路径）
+            -- 点击回调
             local tileR, tileC, tileTerrain, tileSrc = r, c, terrain, tilePath
             local tileClick = function()
                 local name = TERRAIN_NAMES[tileTerrain] or tileTerrain
-                local short = tileSrc:match("[^/]+$") or tileSrc  -- 只取文件名
-                local info = string.format("瓦片[%d,%d] %s", tileR, tileC, name)
+                local short = tileSrc:match("[^/]+$") or tileSrc
+                local info = string.format("瓦片[%d,%d] %s GID=%d", tileR, tileC, name, gid)
                 print(string.format("[PixelMap] 点击 %s | %s", info, tileSrc))
                 if debugLabel_ then
                     debugLabel_:SetText(info .. "  " .. short)
                 end
             end
 
-            local tilePanel
-            if cityName then
-                -- 城池：贴图 + 名称标签 + 边框
-                tilePanel = UI.Panel {
-                    position        = "absolute",
-                    left            = (c - 1) * TILE_PX,
-                    top             = (r - 1) * TILE_PX,
-                    width           = TILE_PX + OVERLAP,
-                    height          = TILE_PX + OVERLAP,
-                    backgroundColor = bg,
-                    backgroundImage = tilePath,
-                    backgroundFit   = "cover",
-                    alignItems      = "center",
-                    justifyContent  = "center",
-                    borderRadius    = 4,
-                    borderWidth     = 2,
-                    borderColor     = { 180, 140, 40, 255 },
-                    onClick         = tileClick,
-                }
-                tilePanel:AddChild(UI.Label {
-                    text       = cityName,
-                    fontSize   = 8,
-                    fontColor  = { 255, 240, 180, 255 },
-                    fontWeight = "bold",
-                    pointerEvents = "none",
-                })
-            else
-                -- 普通地形：底色 + 切片贴图
-                tilePanel = UI.Panel {
-                    position        = "absolute",
-                    left            = (c - 1) * TILE_PX,
-                    top             = (r - 1) * TILE_PX,
-                    width           = TILE_PX + OVERLAP,
-                    height          = TILE_PX + OVERLAP,
-                    backgroundColor = bg,
-                    backgroundImage = tilePath,
-                    backgroundFit   = "cover",
-                    onClick         = tileClick,
-                }
-            end
-
+            local tilePanel = UI.Panel {
+                position        = "absolute",
+                left            = (c - 1) * DISPLAY_PX,
+                top             = (r - 1) * DISPLAY_PX,
+                width           = DISPLAY_PX + OVERLAP,
+                height          = DISPLAY_PX + OVERLAP,
+                backgroundColor = bg,
+                backgroundImage = tilePath,
+                backgroundFit   = "cover",
+                onClick         = tileClick,
+            }
             mapPanel:AddChild(tilePanel)
         end
     end
@@ -587,7 +262,6 @@ function M.Create(opts)
         { "道路",   "road" },
         { "城池",   "city" },
         { "沙地",   "sand" },
-        { "农田",   "farmland" },
         { "桥梁",   "bridge" },
     }
     for _, lg in ipairs(legends) do
