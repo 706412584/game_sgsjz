@@ -8,6 +8,7 @@ local M = {}
 local startScreen_     = nil
 local serverSlot_      = nil
 local onEnterCallback_ = nil
+local onTitleClick_    = nil
 local enterBtn_        = nil
 local enterEnabled_    = false
 
@@ -17,8 +18,10 @@ local BG_IMAGE = "image/start_fire_f3_20260422063332.png"
 --- 创建开始界面覆盖层
 ---@param onEnter fun()
 ---@return table panel
-function M.Create(onEnter)
+function M.Create(onEnter, opts)
     onEnterCallback_ = onEnter
+    opts = opts or {}
+    onTitleClick_ = opts.onTitleClick
     enterEnabled_ = false
 
     startScreen_ = UI.Panel {
@@ -98,6 +101,10 @@ function M.Create(onEnter)
                 backgroundFit   = "contain",
                 width           = 360,
                 height          = 200,
+                cursor          = "pointer",
+                onClick         = function()
+                    if onTitleClick_ then onTitleClick_() end
+                end,
             },
             UI.Label {
                 text       = "百将争雄  逐鹿天下",

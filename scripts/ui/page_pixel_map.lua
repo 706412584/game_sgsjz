@@ -1,5 +1,4 @@
--- ui/page_pixel_map.lua — 像素地图测试页面
--- 使用 sprite_forge 切割的 tileset 瓦片贴图渲染
+-- ui/page_pixel_map.lua — 像素地图（独立瓦片贴图渲染）
 local UI = require("urhox-libs/UI")
 local Comp = require("ui.components")
 
@@ -11,46 +10,40 @@ local MAP_COLS   = 36                  -- 地图列数
 local MAP_ROWS   = 18                  -- 地图行数
 
 ------------------------------------------------------------------------
--- 地形 → tileset 瓦片映射（sprite_forge 分析 + 目视识别）
--- 瓦片来源: spr_sanguo_map_tileset (16x16 grid)
--- 切片路径: Textures/tiles/tile_RR_CC.png (RR=行, CC=列)
+-- 地形 → 瓦片贴图映射
+-- 贴图来源: Textures/tiles_terrain/ (64x64 干净独立贴图)
 ------------------------------------------------------------------------
 local TERRAIN_TILES = {
     grass = {
-        "Textures/tiles/tile_00_00.png",   -- 纯绿草地
-        "Textures/tiles/tile_00_05.png",   -- 纯绿草地变体
-        "Textures/tiles/tile_00_10.png",   -- 纯绿草地变体
+        "Textures/tiles_terrain/grass_1.png",
+        "Textures/tiles_terrain/grass_2.png",
     },
     forest = {
-        "Textures/tiles/tile_03_05.png",   -- 树木（深绿树冠）
-        "Textures/tiles/tile_03_15.png",   -- 树木变体
-        "Textures/tiles/tile_03_10.png",   -- 树木变体
+        "Textures/tiles_terrain/forest_1.png",
+        "Textures/tiles_terrain/forest_2.png",
     },
     water = {
-        "Textures/tiles/tile_07_15.png",   -- 纯蓝水面
-        "Textures/tiles/tile_08_15.png",   -- 纯蓝水面变体
+        "Textures/tiles_terrain/water_1.png",
+        "Textures/tiles_terrain/water_2.png",
     },
     mountain = {
-        "Textures/tiles/tile_05_04.png",   -- 棕色岩石山地
-        "Textures/tiles/tile_05_05.png",   -- 棕色岩石山地变体
+        "Textures/tiles_terrain/mountain_1.png",
     },
     road = {
-        "Textures/tiles/tile_12_05.png",   -- 棕色道路
+        "Textures/tiles_terrain/road_1.png",
     },
     city = {
-        "Textures/tiles/tile_10_05.png",   -- 灰色城墙/城垛
-        "Textures/tiles/tile_10_13.png",   -- 城墙变体
+        "Textures/tiles_terrain/city_1.png",
     },
     sand = {
-        "Textures/tiles/tile_15_05.png",   -- 黄色沙地
-        "Textures/tiles/tile_15_10.png",   -- 沙地变体
+        "Textures/tiles_terrain/sand_1.png",
     },
     bridge = {
-        "Textures/tiles/tile_06_08.png",   -- 桥梁（棕色横跨蓝色）
+        "Textures/tiles_terrain/road_1.png",      -- 桥复用道路贴图
     },
     farmland = {
-        "Textures/tiles/tile_13_05.png",   -- 农田（绿色网格）
-        "Textures/tiles/tile_13_10.png",   -- 农田变体
+        "Textures/tiles_terrain/grass_1.png",      -- 农田复用草地
+        "Textures/tiles_terrain/grass_2.png",
     },
 }
 

@@ -14,6 +14,7 @@ local RecruitPage   = require("ui.page_recruit")
 local ShopPage      = require("ui.page_shop")
 local EquipPage     = require("ui.page_equip")
 local TreasurePage  = require("ui.page_treasure")
+local PixelMapPage  = require("ui.page_pixel_map")
 local ShopData      = require("data.data_shop")
 local TS            = require("data.treasure_state")
 local Modal         = require("ui.modal_manager")
@@ -68,7 +69,7 @@ local function switchPage(pageId)
     -- 战场全屏：进入战斗隐藏顶栏，退出恢复
     local hp = HUD.GetPanel()
     if hp then
-        if pageId == "battle" or pageId == "formation" then
+        if pageId == "battle" or pageId == "formation" or pageId == "pixel_map" then
             hp:SetVisible(false)
             YGNodeStyleSetDisplay(hp.node, YGDisplayNone)
         else
@@ -77,8 +78,8 @@ local function switchPage(pageId)
         end
     end
 
-    -- 非主城页面（且非战斗页面）：顶部插入返回按钮行
-    if pageId ~= "city" and pageId ~= "battle" then
+    -- 非主城页面（且非战斗/像素地图页面）：顶部插入返回按钮行
+    if pageId ~= "city" and pageId ~= "battle" and pageId ~= "pixel_map" then
         local backText = (pageId == "formation") and "返回" or "返回主城"
         local backBar = UI.Panel {
             width          = "100%",
@@ -354,6 +355,15 @@ local function switchPage(pageId)
                 end
             end,
         }))
+
+    elseif pageId == "pixel_map" then
+        contentContainer_:AddChild(PixelMapPage.Create({
+            onBack = function()
+                contentContainer_:ClearChildren()
+                currentPage_ = ""
+                StartPage.Show()
+            end,
+        }))
     end
 
     print("[三国神将录] 切换页面: " .. pageId)
@@ -577,7 +587,12 @@ function Start()
             StartPage.Hide()
             enterGame()
         end
-    end)
+    end, {
+        onTitleClick = function()
+            StartPage.Hide()
+            switchPage("pixel_map")
+        end,
+    })
 
     -- 主布局
     local root = UI.SafeAreaView {

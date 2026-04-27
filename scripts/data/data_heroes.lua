@@ -95,7 +95,7 @@ M.HEROES = {
         skill   = "无",
         skillDesc = "无",
         passive = "奸雄",
-        passiveDesc = "战法增伤12%并为全队回怒",
+        passiveDesc = "战法增伤12%并为全队增怒15点",
         lore    = "挟天子以令诸侯，一代枭雄，文武兼备，奠定曹魏基业。",
         evolve  = "乱世曹操",
     },
@@ -135,7 +135,7 @@ M.HEROES = {
         skill   = "无",
         skillDesc = "无",
         passive = "鬼才",
-        passiveDesc = "战法减敌怒并降低智力",
+        passiveDesc = "战法减怒20并降智15%持续2回合",
         evolve  = "寒星郭嘉",
     },
     simayi = {
@@ -379,7 +379,7 @@ M.HEROES = {
         skill   = "无",
         skillDesc = "无",
         passive = "国色",
-        passiveDesc = "为全队施加护盾抵挡伤害",
+        passiveDesc = "为全队施加20%护盾抵挡伤害",
         evolve  = nil,
     },
     xiaoqiao = {
@@ -475,7 +475,7 @@ M.HEROES = {
         skill   = "无",
         skillDesc = "无",
         passive = "盟主",
-        passiveDesc = "全队增加兵力和攻击力",
+        passiveDesc = "全队增怒10点并增加攻击力",
         evolve  = nil,
     },
     zuoci = {
@@ -501,7 +501,7 @@ M.HEROES = {
         skill   = "无",
         skillDesc = "无",
         passive = "悲歌",
-        passiveDesc = "治疗并增加友军防御",
+        passiveDesc = "治疗15%并增加友军防御",
         evolve  = nil,
     },
 

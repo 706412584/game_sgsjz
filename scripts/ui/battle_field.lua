@@ -37,6 +37,18 @@ local STATUS_NAMES = {
     atk_up = "攻↑", def_up = "防↑", speed_up = "速↑",
 }
 
+-- 状态效果图标路径
+local STATUS_ICONS = {
+    stun        = "Textures/icons/status/icon_status_stun.png",
+    silence     = "Textures/icons/status/icon_status_silence.png",
+    armor_break = "Textures/icons/status/icon_status_armor_break.png",
+    burn        = "Textures/icons/status/icon_status_burn.png",
+    charm       = "Textures/icons/status/icon_status_charm.png",
+    freeze      = "Textures/icons/status/icon_status_freeze.png",
+    shield      = "Textures/icons/status/icon_status_shield.png",
+    hot         = "Textures/icons/status/icon_status_hot.png",
+}
+
 ------------------------------------------------------------
 -- 内部状态
 ------------------------------------------------------------
@@ -115,13 +127,13 @@ local function createCard(unit, side, colKey, rowIdx)
         }
     end
 
-    local statusLabel = UI.Label {
-        text      = "",
-        fontSize  = statusFontSize,
-        fontColor = C.gold,
-        textAlign = "center",
-        width     = cardW_,
-        maxLines  = 1,
+    local statusContainer = UI.Panel {
+        width          = cardW_,
+        height         = 16,
+        flexDirection  = "row",
+        justifyContent = "center",
+        alignItems     = "center",
+        gap            = 1,
     }
 
     local nameLabel = UI.Label {
@@ -162,7 +174,7 @@ local function createCard(unit, side, colKey, rowIdx)
     -- 普通 flex 子元素, 不用 absolute
     local cardChildren = { avatar, nameLabel, hpBar }
     if moraleBar then cardChildren[#cardChildren + 1] = moraleBar end
-    cardChildren[#cardChildren + 1] = statusLabel
+    cardChildren[#cardChildren + 1] = statusContainer
 
     local card = UI.Panel {
         width      = cardW_,
@@ -174,17 +186,17 @@ local function createCard(unit, side, colKey, rowIdx)
     }
 
     unitCards_[unit.id] = {
-        panel       = card,
-        hpBar       = hpBar,
-        moraleBar   = moraleBar,
-        statusLabel = statusLabel,
-        avatar      = avatar,
-        nameLabel   = nameLabel,
-        colKey      = colKey,
-        rowIdx      = rowIdx,
-        side        = side,
-        spriteIdle  = spriteIdle or imgPath,
-        spriteAtk   = spriteAtk,
+        panel           = card,
+        hpBar           = hpBar,
+        moraleBar       = moraleBar,
+        statusContainer = statusContainer,
+        avatar          = avatar,
+        nameLabel       = nameLabel,
+        colKey          = colKey,
+        rowIdx          = rowIdx,
+        side            = side,
+        spriteIdle      = spriteIdle or imgPath,
+        spriteAtk       = spriteAtk,
     }
 
     -- 待机呼吸动画: 微缩放循环 (让角色看起来有生命感)
@@ -403,16 +415,47 @@ function M.UpdateUnit(unitId, hp, maxHp, morale, statuses, alive)
         })
     end
 
-    if info.statusLabel then
+    if info.statusContainer then
+        -- 清除旧图标
+        info.statusContainer:RemoveAllChildren()
         if statuses and next(statuses) then
-            local parts = {}
+            local iconSize = 14
             for status, sInfo in pairs(statuses) do
-                local sName = STATUS_NAMES[status] or status
-                parts[#parts + 1] = sName .. sInfo.dur
+                local iconPath = STATUS_ICONS[status]
+                if iconPath then
+                    -- 图标 + 回合数
+                    local badge = UI.Panel {
+                        width          = iconSize + 8,
+                        height         = iconSize,
+                        flexDirection  = "row",
+                        alignItems     = "center",
+                        gap            = 0,
+                        children       = {
+                            UI.Panel {
+                                width           = iconSize,
+                                height          = iconSize,
+                                backgroundImage = iconPath,
+                                backgroundFit   = "contain",
+                            },
+                            UI.Label {
+                                text      = tostring(sInfo.dur),
+                                fontSize  = 8,
+                                fontColor = C.gold,
+                            },
+                        },
+                    }
+                    info.statusContainer:AddChild(badge)
+                else
+                    -- 无图标的状态: 用文字回退
+                    local sName = STATUS_NAMES[status] or status
+                    local lbl = UI.Label {
+                        text      = sName .. sInfo.dur,
+                        fontSize  = 8,
+                        fontColor = C.gold,
+                    }
+                    info.statusContainer:AddChild(lbl)
+                end
             end
-            info.statusLabel.text = table.concat(parts, " ")
-        else
-            info.statusLabel.text = ""
         end
     end
 end
