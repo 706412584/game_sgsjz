@@ -376,7 +376,18 @@ def analyze_and_slice(input_path, output_dir, tile_size=24, white_threshold=235,
         for rs, re in row_ranges:
             mid = (rs + re) // 2
             sample_rows.append(mid)
-        col_seps = detect_dark_separators(arr, 'col', sample_rows, brightness_threshold=85)
+        col_seps = detect_dark_separators(arr, 'col', sample_rows, brightness_threshold=95)
+        # 过滤间距过小的误检（真正的 tile 宽度接近 tile_size）
+        min_gap = max(tile_size - 2, int(tile_size * 0.85))
+        if len(col_seps) > 2:
+            filtered = [col_seps[0]]
+            for s in col_seps[1:]:
+                if s - filtered[-1] >= min_gap:
+                    filtered.append(s)
+                else:
+                    # 保留亮度更低的
+                    pass
+            col_seps = filtered
         # 确保包含内容区起始边框
         if col_seps and col_seps[0] > content_x + 2:
             col_seps.insert(0, content_x)
@@ -412,13 +423,27 @@ def analyze_and_slice(input_path, output_dir, tile_size=24, white_threshold=235,
     saved = 0
     skipped = 0
 
+    # 像素画 tileset 通常有 1px 内描边，相邻瓦片拼接时会出现 2px 黑线
+    # 每边内缩 1px 裁掉描边，再 resize 到目标尺寸
+    inset = 1
+
     for ri, (ry0, ry1) in enumerate(row_ranges):
         row_tiles = []
         for ci, (cx0, cx1) in enumerate(col_ranges):
             ry1_safe = min(ry1, h)
             cx1_safe = min(cx1, w)
 
-            tile_data = arr[ry0:ry1_safe, cx0:cx1_safe].copy()
+            # 内缩裁切（去掉描边像素）
+            crop_y0 = min(ry0 + inset, ry1_safe)
+            crop_y1 = max(ry0, ry1_safe - inset)
+            crop_x0 = min(cx0 + inset, cx1_safe)
+            crop_x1 = max(cx0, cx1_safe - inset)
+
+            if crop_y1 <= crop_y0 or crop_x1 <= crop_x0:
+                skipped += 1
+                continue
+
+            tile_data = arr[crop_y0:crop_y1, crop_x0:crop_x1].copy()
 
             if is_empty_tile(tile_data, white_threshold):
                 skipped += 1
@@ -451,7 +476,7 @@ def analyze_and_slice(input_path, output_dir, tile_size=24, white_threshold=235,
 def main():
     parser = argparse.ArgumentParser(description="Smart tileset slicer (non-uniform grid)")
     parser.add_argument("input", nargs="?",
-                        default="assets/image/spr_sanguo_map_tileset_20260427103958.png",
+                        default="assets/image/spr_sanguo_map_tileset_v2_20260427172102.png",
                         help="Input tileset image")
     parser.add_argument("output", nargs="?",
                         default="assets/Textures/tiles_sliced",
