@@ -507,14 +507,15 @@ function M.Create(opts)
 
             local bg = TERRAIN_BG[terrain] or TERRAIN_BG.grass
 
-            -- 瓦片点击回调（调试：显示行列+地形）
-            local tileR, tileC, tileTerrain = r, c, terrain
+            -- 瓦片点击回调（调试：显示行列+地形+切片路径）
+            local tileR, tileC, tileTerrain, tileSrc = r, c, terrain, tilePath
             local tileClick = function()
                 local name = TERRAIN_NAMES[tileTerrain] or tileTerrain
+                local short = tileSrc:match("[^/]+$") or tileSrc  -- 只取文件名
                 local info = string.format("瓦片[%d,%d] %s", tileR, tileC, name)
-                print(string.format("[PixelMap] 点击 %s", info))
+                print(string.format("[PixelMap] 点击 %s | %s", info, tileSrc))
                 if debugLabel_ then
-                    debugLabel_:SetText(info)
+                    debugLabel_:SetText(info .. "  " .. short)
                 end
             end
 
