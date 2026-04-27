@@ -366,6 +366,32 @@ local function parseSkillFromDesc(heroId, heroData)
         skill.extras.pursuitOnShieldBreak = true
     end
 
+    -- ============================================================
+    -- 解析被动描述(passiveDesc) 中的"攻击附加状态"效果
+    -- 如 "攻击35%概率眩晕敌人" / "法伤40%概率沉默敌人"
+    -- ============================================================
+    local pDesc = heroData.passiveDesc or ""
+    local passiveStatusParsers = {
+        { pattern = "(%d+)%%概率眩晕",  status = STATUS.STUN },
+        { pattern = "(%d+)%%概率沉默",  status = STATUS.SILENCE },
+        { pattern = "(%d+)%%概率魅惑",  status = STATUS.CHARM },
+        { pattern = "(%d+)%%概率混乱",  status = STATUS.CHARM },
+        { pattern = "(%d+)%%概率控制",  status = STATUS.STUN },
+        { pattern = "(%d+)%%概率冰冻",  status = STATUS.FREEZE },
+        { pattern = "(%d+)%%[附概率]*破甲", status = STATUS.ARMOR_BREAK },
+    }
+    for _, sp in ipairs(passiveStatusParsers) do
+        local pct = pDesc:match(sp.pattern)
+        if pct then
+            skill.passiveStatusEffect = {
+                status = sp.status,
+                rate   = tonumber(pct) / 100,
+                dur    = 1,
+            }
+            break
+        end
+    end
+
     return skill
 end
 
@@ -1068,6 +1094,10 @@ local function executeAction(actor, allUnits)
     if actor.heroId then
         local sk = M.GetSkill(actor.heroId)
         if sk and sk.extras then extras = sk.extras end
+        -- 被动附加状态(如"攻击35%概率眩晕")挂载到extras供普攻使用
+        if sk and sk.passiveStatusEffect then
+            extras._passiveStatus = sk.passiveStatusEffect
+        end
     end
 
     local action = {
@@ -1430,6 +1460,19 @@ local function executeAction(actor, allUnits)
                     actor.morale = math.min(M.MORALE_MAX, actor.morale + M.MORALE_HIT)
                 end
                 postDamageHit(t, dmg, false)
+
+                -- 被动附加状态: 普攻命中后触发(如眩晕/沉默/破甲)
+                if t.alive and extras._passiveStatus then
+                    local ps = extras._passiveStatus
+                    local applied = tryApplyStatus(t, ps.status, ps.dur, ps.rate)
+                    if applied then
+                        action.statuses[#action.statuses + 1] = {
+                            target = t.name,
+                            status = ps.status,
+                            dur    = ps.dur,
+                        }
+                    end
+                end
             end
         end
     end
