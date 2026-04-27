@@ -30,7 +30,7 @@ local TERRAIN_TILES = {
     forest   = slicedTiles(2, 9),   -- r02: 森林
     mountain = slicedTiles(3, 9),   -- r03: 山脉
     water    = slicedTiles(4, 9),   -- r04: 水域
-    farmland = slicedTiles(5, 9),   -- r05: 农田
+    farmland = slicedTiles(5, 5),   -- r05 c00-c04: 纯农田（c05-c08 是南岸水域，归 autotile）
     city     = slicedTiles(6, 9),   -- r06: 城池
     bridge   = slicedTiles(7, 9),   -- r07: 桥梁
     road     = slicedTiles(8, 9),   -- r08: 道路
@@ -66,6 +66,87 @@ local LEGEND_COLORS = {
     bridge   = { 160, 130, 80 },
     farmland = { 100, 160, 60 },
 }
+
+------------------------------------------------------------------------
+-- 水域 Autotile —— 根据四邻地形选择正确的边缘/角/中心瓦片
+------------------------------------------------------------------------
+local function wt(row, col)
+    return string.format("Textures/tiles_sliced/tile_r%02d_c%02d.png", row, col)
+end
+
+--- 水域瓦片按边缘模式分组
+--- key = 哪些方向有陆地邻居
+local WATER_AUTO = {
+    center     = { wt(4,6), wt(4,8) },                     -- 四周都是水 → 中心
+    north      = { wt(4,0), wt(4,1), wt(4,4) },            -- 上方陆地 → 北岸
+    south      = { wt(5,6), wt(5,7), wt(5,8) },            -- 下方陆地 → 南岸
+    east       = { wt(4,5) },                               -- 右方陆地 → 东岸
+    west       = { wt(4,7) },                               -- 左方陆地 → 西岸
+    north_east = { wt(4,2) },                               -- 右上陆地 → 东北角
+    north_west = { wt(4,3) },                               -- 左上陆地 → 西北角
+    south_west = { wt(5,5) },                               -- 左下陆地 → 西南角
+    south_east = { wt(4,5) },                               -- 右下陆地 → 东南角（复用东岸）
+}
+
+--- 判断地形是否属于水域（水域和桥梁在 autotile 邻居检测中视为同类）
+local function isWaterLike(terrain)
+    return terrain == "water" or terrain == "bridge"
+end
+
+--- 根据四邻地形选择水域瓦片
+---@param mapData table 地图二维数组
+---@param r number 行号
+---@param c number 列号
+---@return string 瓦片路径
+local function selectWaterTile(mapData, r, c)
+    local rows, cols = #mapData, #mapData[1]
+
+    -- 检测四方向是否为陆地（地图边界视为水域，避免边缘产生假岸线）
+    local nLand = false
+    local sLand = false
+    local eLand = false
+    local wLand = false
+    if r > 1    then nLand = not isWaterLike(mapData[r - 1][c]) end
+    if r < rows then sLand = not isWaterLike(mapData[r + 1][c]) end
+    if c < cols then eLand = not isWaterLike(mapData[r][c + 1]) end
+    if c > 1    then wLand = not isWaterLike(mapData[r][c - 1]) end
+
+    -- 统计陆地邻居数量
+    local landCount = 0
+    if nLand then landCount = landCount + 1 end
+    if sLand then landCount = landCount + 1 end
+    if eLand then landCount = landCount + 1 end
+    if wLand then landCount = landCount + 1 end
+
+    -- 匹配模式：0→中心，3+→被围（用中心），2→角/窄道，1→岸
+    local key
+    if landCount == 0 or landCount >= 3 then
+        key = "center"
+    elseif nLand and eLand then
+        key = "north_east"
+    elseif nLand and wLand then
+        key = "north_west"
+    elseif sLand and wLand then
+        key = "south_west"
+    elseif sLand and eLand then
+        key = "south_east"
+    elseif nLand and sLand then
+        -- 南北夹缝（窄河横道），随机取南或北岸
+        key = math.random(2) == 1 and "north" or "south"
+    elseif eLand and wLand then
+        -- 东西夹缝（窄河纵道），随机取东或西岸
+        key = math.random(2) == 1 and "east" or "west"
+    elseif nLand then key = "north"
+    elseif sLand then key = "south"
+    elseif eLand then key = "east"
+    elseif wLand then key = "west"
+    else
+        key = "center"
+    end
+
+    local tiles = WATER_AUTO[key]
+    return tiles[math.random(1, #tiles)]
+end
 
 --- 从瓦片列表中随机选一个贴图路径
 local function randomTile(terrainType)
@@ -291,7 +372,12 @@ function M.Create(opts)
     for r = 1, MAP_ROWS do
         for c = 1, MAP_COLS do
             local terrain = mapData[r][c]
-            local tilePath = randomTile(terrain)
+            local tilePath
+            if terrain == "water" then
+                tilePath = selectWaterTile(mapData, r, c)
+            else
+                tilePath = randomTile(terrain)
+            end
             local cityName = cityLookup[r .. "_" .. c]
 
             local bg = TERRAIN_BG[terrain] or TERRAIN_BG.grass
