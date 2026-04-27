@@ -441,11 +441,12 @@ function M.Create(opts)
         paddingBottom  = 8,
     }
 
-    -- 地图网格面板（逐行嵌套，避免 flexWrap 亚像素间隙）
+    -- 地图网格面板（绝对定位瓦片 +1px 重叠消除 NanoVG 抗锯齿接缝）
     local mapPanel = UI.Panel {
-        width         = MAP_COLS * TILE_PX,
-        height        = MAP_ROWS * TILE_PX,
-        flexDirection = "column",
+        width           = MAP_COLS * TILE_PX,
+        height          = MAP_ROWS * TILE_PX,
+        overflow        = "hidden",
+        backgroundColor = { 92, 168, 64, 255 },  -- 草绿兜底，防止暗色透出
     }
 
     -- 城市名称查找表
@@ -454,13 +455,9 @@ function M.Create(opts)
         cityLookup[ct.r .. "_" .. ct.c] = ct.name
     end
 
-    -- 填充瓦片贴图（逐行布局）
+    -- 填充瓦片贴图（绝对定位 +1px 重叠，消除 NanoVG 抗锯齿接缝）
+    local OVERLAP = 1  -- 每瓦片向右下多画 1px，覆盖相邻抗锯齿边
     for r = 1, MAP_ROWS do
-        local rowPanel = UI.Panel {
-            width         = MAP_COLS * TILE_PX,
-            height        = TILE_PX,
-            flexDirection = "row",
-        }
         for c = 1, MAP_COLS do
             local terrain = mapData[r][c]
             local tilePath
@@ -486,8 +483,11 @@ function M.Create(opts)
             if cityName then
                 -- 城池：贴图 + 名称标签 + 边框
                 tilePanel = UI.Panel {
-                    width           = TILE_PX,
-                    height          = TILE_PX,
+                    position        = "absolute",
+                    left            = (c - 1) * TILE_PX,
+                    top             = (r - 1) * TILE_PX,
+                    width           = TILE_PX + OVERLAP,
+                    height          = TILE_PX + OVERLAP,
                     backgroundColor = bg,
                     backgroundImage = tilePath,
                     backgroundFit   = "cover",
@@ -506,17 +506,19 @@ function M.Create(opts)
             else
                 -- 普通地形：底色 + 切片贴图
                 tilePanel = UI.Panel {
-                    width           = TILE_PX,
-                    height          = TILE_PX,
+                    position        = "absolute",
+                    left            = (c - 1) * TILE_PX,
+                    top             = (r - 1) * TILE_PX,
+                    width           = TILE_PX + OVERLAP,
+                    height          = TILE_PX + OVERLAP,
                     backgroundColor = bg,
                     backgroundImage = tilePath,
                     backgroundFit   = "cover",
                 }
             end
 
-            rowPanel:AddChild(tilePanel)
+            mapPanel:AddChild(tilePanel)
         end
-        mapPanel:AddChild(rowPanel)
     end
 
     scrollWrap:AddChild(mapPanel)
