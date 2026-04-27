@@ -148,6 +148,74 @@ local function selectWaterTile(mapData, r, c)
     return tiles[math.random(1, #tiles)]
 end
 
+------------------------------------------------------------------------
+-- 城池多格布局 — 每座城占 3×3 格（墙+角+门）
+------------------------------------------------------------------------
+local CITY_LAYOUT = {
+    nw = { wt(6, 4) },                             -- 左上角
+    n  = { wt(6, 0), wt(6, 1), wt(6, 2), wt(6, 9) }, -- 北墙（水平墙段）
+    ne = { wt(6, 4) },                             -- 右上角
+    w  = { wt(6, 5) },                             -- 西墙（垂直墙段）
+    c  = { wt(6, 7) },                             -- 城内（中心）
+    e  = { wt(6, 6) },                             -- 东墙（垂直墙段）
+    sw = { wt(6, 4) },                             -- 左下角
+    s  = { wt(6, 8) },                             -- 南门（城门楼）
+    se = { wt(6, 4) },                             -- 右下角
+}
+
+--- 3×3 偏移 → 布局位置键
+local CITY_OFFSETS = {
+    { -1, -1, "nw" }, { -1, 0, "n" }, { -1, 1, "ne" },
+    {  0, -1, "w"  }, {  0, 0, "c" }, {  0, 1, "e"  },
+    {  1, -1, "sw" }, {  1, 0, "s" }, {  1, 1, "se" },
+}
+
+------------------------------------------------------------------------
+-- 道路 Autotile — 根据四邻地形选择正确的道路瓦片
+------------------------------------------------------------------------
+local ROAD_AUTO = {
+    center     = { wt(8,0), wt(8,1), wt(8,2) },   -- 多方向连接 → 实心路面
+    horizontal = { wt(8,0), wt(8,1) },             -- 东西走向
+    vertical   = { wt(8,2), wt(8,7) },             -- 南北走向
+    isolated   = { wt(8,8), wt(8,9) },             -- 孤立路块
+}
+
+--- 判断地形是否属于道路类（道路 autotile 邻居检测中视为同类）
+local function isRoadLike(terrain)
+    return terrain == "road" or terrain == "bridge" or terrain == "city"
+end
+
+--- 根据四邻地形选择道路瓦片
+---@param mapData table 地图二维数组
+---@param r number 行号
+---@param c number 列号
+---@return string 瓦片路径
+local function selectRoadTile(mapData, r, c)
+    local rows, cols = #mapData, #mapData[1]
+    local nRoad = r > 1    and isRoadLike(mapData[r - 1][c])
+    local sRoad = r < rows and isRoadLike(mapData[r + 1][c])
+    local eRoad = c < cols and isRoadLike(mapData[r][c + 1])
+    local wRoad = c > 1    and isRoadLike(mapData[r][c - 1])
+
+    local count = 0
+    if nRoad then count = count + 1 end
+    if sRoad then count = count + 1 end
+    if eRoad then count = count + 1 end
+    if wRoad then count = count + 1 end
+
+    local tiles
+    if count == 0 then
+        tiles = ROAD_AUTO.isolated
+    elseif count >= 2 then
+        tiles = ROAD_AUTO.center
+    elseif nRoad or sRoad then
+        tiles = ROAD_AUTO.vertical
+    else
+        tiles = ROAD_AUTO.horizontal
+    end
+    return tiles[math.random(1, #tiles)]
+end
+
 --- 从瓦片列表中随机选一个贴图路径
 local function randomTile(terrainType)
     local list = TERRAIN_TILES[terrainType] or TERRAIN_TILES.grass
@@ -266,7 +334,7 @@ local function generateMap()
         end
     end
 
-    -- 10) 城池放置（三国经典城市布局）
+    -- 10) 城池放置（三国经典城市布局）——每城占 3×3 格
     local cities = {
         { r = 3,  c = 8,  name = "邺城" },
         { r = 4,  c = 28, name = "许昌" },
@@ -277,13 +345,24 @@ local function generateMap()
         { r = 13, c = 24, name = "建业" },
         { r = 15, c = 16, name = "长沙" },
     }
+    local cityPosMap = {}  -- "r_c" → 布局位置 (nw/n/ne/w/c/e/sw/s/se)
     for _, ct in ipairs(cities) do
-        if ct.r >= 1 and ct.r <= MAP_ROWS and ct.c >= 1 and ct.c <= MAP_COLS then
-            map[ct.r][ct.c] = "city"
+        for _, off in ipairs(CITY_OFFSETS) do
+            local rr = ct.r + off[1]
+            local cc = ct.c + off[2]
+            if rr >= 1 and rr <= MAP_ROWS and cc >= 1 and cc <= MAP_COLS then
+                map[rr][cc] = "city"
+                cityPosMap[rr .. "_" .. cc] = off[3]
+            end
+        end
+        -- 城门前方加一格道路连接
+        local gateR = ct.r + 2
+        if gateR >= 1 and gateR <= MAP_ROWS and map[gateR][ct.c] ~= "water" then
+            map[gateR][ct.c] = "road"
         end
     end
 
-    return map, cities
+    return map, cities, cityPosMap
 end
 
 local container_ = nil
@@ -294,7 +373,7 @@ local onBack_    = nil
 function M.Create(opts)
     opts = opts or {}
     onBack_ = opts.onBack
-    local mapData, cities = generateMap()
+    local mapData, cities, cityPosMap = generateMap()
 
     -- 全屏容器
     container_ = UI.Panel {
@@ -375,6 +454,16 @@ function M.Create(opts)
             local tilePath
             if terrain == "water" then
                 tilePath = selectWaterTile(mapData, r, c)
+            elseif terrain == "road" then
+                tilePath = selectRoadTile(mapData, r, c)
+            elseif terrain == "city" then
+                local pos = cityPosMap[r .. "_" .. c]
+                if pos then
+                    local tiles = CITY_LAYOUT[pos]
+                    tilePath = tiles[math.random(1, #tiles)]
+                else
+                    tilePath = randomTile("city")
+                end
             else
                 tilePath = randomTile(terrain)
             end
