@@ -71,17 +71,30 @@ local FLIP_MASK = FLIP_H | FLIP_V | FLIP_D
 local FIRSTGID  = 1
 local TILESET_COLS = 9
 
---- 从 tile GID 获取切片路径和地形
+--- 从 tile GID 获取切片路径和地形（含翻转变体）
 local function tileInfo(gid)
     if gid == 0 then
         return "Textures/tiles_sliced/tile_r00_c00.png", "grass"
     end
-    local raw = gid & ~FLIP_MASK  -- 去掉翻转位
+    local flipH = (gid & FLIP_H) ~= 0
+    local flipV = (gid & FLIP_V) ~= 0
+    local flipD = (gid & FLIP_D) ~= 0
+    local raw = gid & ~FLIP_MASK
     local idx = raw - FIRSTGID
     if idx < 0 then idx = 0 end
     local row = math.floor(idx / TILESET_COLS)
     local col = idx % TILESET_COLS
-    local path = string.format("Textures/tiles_sliced/tile_r%02d_c%02d.png", row, col)
+
+    -- 构建翻转后缀（对应预生成的翻转 PNG）
+    local suffix = ""
+    if flipH or flipV or flipD then
+        suffix = "_"
+        if flipH then suffix = suffix .. "h" end
+        if flipV then suffix = suffix .. "v" end
+        if flipD then suffix = suffix .. "d" end
+    end
+
+    local path = string.format("Textures/tiles_sliced/tile_r%02d_c%02d%s.png", row, col, suffix)
     local terrain = ROW_TERRAIN[row] or "grass"
     return path, terrain
 end
