@@ -1,4 +1,4 @@
--- ui/page_pixel_map.lua — 像素地图（独立瓦片贴图渲染）
+-- ui/page_pixel_map.lua — 像素地图（切片瓦片贴图渲染）
 local UI = require("urhox-libs/UI")
 local Comp = require("ui.components")
 
@@ -11,40 +11,47 @@ local MAP_ROWS   = 18                  -- 地图行数
 
 ------------------------------------------------------------------------
 -- 地形 → 瓦片贴图映射
--- 贴图来源: Textures/tiles_terrain/ (64x64 干净独立贴图)
+-- 贴图来源: Textures/tiles_sliced/ (从原始 tileset 切片，24x24 透明背景)
+-- 行映射: r00-r01=草地, r02=森林, r03=山脉, r04=水域,
+--         r05=农田, r06=城池, r07=桥梁, r08=道路, r09=沙地
 ------------------------------------------------------------------------
+local function slicedTiles(row, count)
+    count = count or 9
+    local t = {}
+    for c = 0, count - 1 do
+        t[#t + 1] = string.format("Textures/tiles_sliced/tile_r%02d_c%02d.png", row, c)
+    end
+    return t
+end
+
 local TERRAIN_TILES = {
-    grass = {
-        "Textures/tiles_terrain/grass_1.png",
-        "Textures/tiles_terrain/grass_2.png",
-    },
-    forest = {
-        "Textures/tiles_terrain/forest_1.png",
-        "Textures/tiles_terrain/forest_2.png",
-    },
-    water = {
-        "Textures/tiles_terrain/water_1.png",
-        "Textures/tiles_terrain/water_2.png",
-    },
-    mountain = {
-        "Textures/tiles_terrain/mountain_1.png",
-    },
-    road = {
-        "Textures/tiles_terrain/road_1.png",
-    },
-    city = {
-        "Textures/tiles_terrain/city_1.png",
-    },
-    sand = {
-        "Textures/tiles_terrain/sand_1.png",
-    },
-    bridge = {
-        "Textures/tiles_terrain/road_1.png",      -- 桥复用道路贴图
-    },
-    farmland = {
-        "Textures/tiles_terrain/grass_1.png",      -- 农田复用草地
-        "Textures/tiles_terrain/grass_2.png",
-    },
+    grass    = slicedTiles(0, 9),   -- r00: 浅草 9 变体
+    -- r01 也是草地变体，合并进 grass
+    forest   = slicedTiles(2, 9),   -- r02: 森林
+    mountain = slicedTiles(3, 9),   -- r03: 山脉
+    water    = slicedTiles(4, 9),   -- r04: 水域
+    farmland = slicedTiles(5, 9),   -- r05: 农田
+    city     = slicedTiles(6, 9),   -- r06: 城池
+    bridge   = slicedTiles(7, 9),   -- r07: 桥梁
+    road     = slicedTiles(8, 9),   -- r08: 道路
+    sand     = slicedTiles(9, 9),   -- r09: 沙地
+}
+-- 将 r01 草地变体也加入 grass 列表
+for _, v in ipairs(slicedTiles(1, 9)) do
+    TERRAIN_TILES.grass[#TERRAIN_TILES.grass + 1] = v
+end
+
+--- 地形底色（切片贴图有透明区域，需底色衬托）
+local TERRAIN_BG = {
+    grass    = { 92, 168, 64, 255 },
+    forest   = { 54, 120, 48, 255 },
+    water    = { 52, 108, 200, 255 },
+    mountain = { 148, 128, 96, 255 },
+    road     = { 160, 140, 90, 255 },
+    city     = { 140, 130, 110, 255 },
+    sand     = { 208, 192, 136, 255 },
+    bridge   = { 60, 100, 180, 255 },
+    farmland = { 100, 150, 60, 255 },
 }
 
 --- 图例用的代表色（仅用于底部图例色块显示）
@@ -287,12 +294,14 @@ function M.Create(opts)
             local tilePath = randomTile(terrain)
             local cityName = cityLookup[r .. "_" .. c]
 
+            local bg = TERRAIN_BG[terrain] or TERRAIN_BG.grass
             local tilePanel
             if cityName then
                 -- 城池：贴图 + 名称标签 + 边框
                 tilePanel = UI.Panel {
                     width           = TILE_PX,
                     height          = TILE_PX,
+                    backgroundColor = bg,
                     backgroundImage = tilePath,
                     backgroundFit   = "cover",
                     alignItems      = "center",
@@ -308,10 +317,11 @@ function M.Create(opts)
                     fontWeight = "bold",
                 })
             else
-                -- 普通地形：贴图
+                -- 普通地形：底色 + 切片贴图
                 tilePanel = UI.Panel {
                     width           = TILE_PX,
                     height          = TILE_PX,
+                    backgroundColor = bg,
                     backgroundImage = tilePath,
                     backgroundFit   = "cover",
                 }
