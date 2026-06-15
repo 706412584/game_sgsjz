@@ -1,34 +1,48 @@
-# Build & dist
+# Build artifacts & runtime state
 .build/
 dist/
-
-# Engine internal (read-only, not user code)
-engine-docs/
-examples/
-templates/
-urhox-libs/
-schemas/
-lua-tools/
-.emmylua/
-
-# AI & tool config
-.claude/
 .cli/
-.agent/
-prompts/
-CLAUDE.md
-
-# Project config & temp
-.project/
-.tmp/
 logs/
+*.log
+logs/.nfs*
+.sce/logs/
+.sce/build/build_steps/__pycache__/
 
-# SSH keys
+# Project config & secrets
+.project/
 .ssh/
 
-# OS files
+# Temp & swap files
+.tmp/
+*.crswap
 .DS_Store
 Thumbs.db
 
 # Meta files
 *.meta
+
+# OSS util
+.ossutil_checkpoint/
+ossutil_output/
+
+# Editor / IDE / agent configs
+.vscode/
+.cursor/
+.codex/
+.gemini/
+.claude/
+.emmylua/
+.installer/
+.maker/
+
+# Maker engine assets & agent files (provided by ai-dev-kit, not user source)
+engine-docs/
+examples/
+lua-tools/
+schemas/
+skills/
+templates/
+tools/
+urhox-libs/
+AGENTS.md
+CLAUDE.md
